@@ -1,0 +1,3650 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mini huerta hidropónica con recirculación — Informe de Educación Tecnológica</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js r128 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: #dce5ed;
+            color: #0f172a;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+        }
+        #canvas-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background-color: #dce5ed;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+            touch-action: none;
+        }
+        canvas:active {
+            cursor: grabbing;
+        }
+        /* Etiquetas 3D proyectadas: más compactas y discretas para no tapar el modelo */
+        .floating-tag {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            z-index: 10;
+            white-space: nowrap;
+            font-size: 10px;
+            line-height: 1.25;
+            padding: 2px 7px;
+            border-radius: 6px;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+        }
+        .cota-tag {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            opacity: 0;
+            z-index: 11;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+            transition: opacity 0.18s ease;
+            font-size: 10px;
+            line-height: 1.2;
+            padding: 2px 6px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(15, 23, 42, 0.16);
+        }
+        @media (min-width: 640px) {
+            .floating-tag {
+                font-size: 11px;
+                padding: 3px 8px;
+            }
+            .cota-tag {
+                font-size: 10.5px;
+                padding: 2px 7px;
+            }
+        }
+        /* Animación suave para el cartel de alerta de nivel bajo */
+        @keyframes pulse-alert {
+            0%, 100% { transform: translateX(-50%) scale(1); box-shadow: 0 10px 25px -5px rgba(220, 38, 38, 0.45); }
+            50% { transform: translateX(-50%) scale(1.02); box-shadow: 0 14px 30px -5px rgba(220, 38, 38, 0.75); }
+        }
+        .low-level-banner {
+            animation: pulse-alert 1.6s infinite ease-in-out;
+        }
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen w-screen overflow-hidden">
+
+    <!-- ENCABEZADO PRINCIPAL COMPACTO Y ADAPTATIVO -->
+    <header id="top-header" class="bg-white/95 backdrop-blur-md border-b border-slate-200 px-2.5 py-1.5 sm:px-4 sm:py-2 flex flex-wrap items-center justify-between gap-1.5 z-30 shadow-sm shrink-0">
+        <div class="flex items-center gap-2 min-w-0">
+            <div class="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-emerald-700 flex items-center justify-center text-white shadow-sm shrink-0">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" />
+                </svg>
+            </div>
+            <div class="min-w-0">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    <h1 class="text-xs sm:text-base md:text-lg font-extrabold text-slate-900 tracking-tight truncate">
+                        Mini huerta hidropónica con recirculación
+                    </h1>
+                    <span class="hidden md:inline-block text-[11px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                        Simulación 3D interactiva
+                    </span>
+                </div>
+                <p class="text-[11px] text-slate-500 hidden lg:block truncate">
+                    Estructura 90×45×100 cm · 2 canales PVC Ø 110 mm (80 cm) · 4 lechugas (a 30 cm) · Depósito opaco 20 L con bomba y sensor
+                </p>
+            </div>
+        </div>
+
+        <!-- Indicadores de estado rápidos -->
+        <div class="flex items-center flex-wrap gap-1 sm:gap-1.5 text-[10px] sm:text-xs font-bold">
+            <div id="status-timer-pill" class="hidden items-center gap-1 px-2 py-0.5 sm:py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-300">
+                <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                <span id="status-timer-text">Demo acelerada</span>
+            </div>
+            <div id="status-pump-pill" class="flex items-center gap-1 px-2 py-0.5 sm:py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-300">
+                <span id="status-pump-dot" class="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-slate-400"></span>
+                <span id="status-pump-text">Bomba: Apagada</span>
+            </div>
+            <div id="status-level-pill" class="flex items-center gap-1 px-2 py-0.5 sm:py-1 rounded-lg bg-sky-50 text-sky-900 border border-sky-200">
+                <span id="status-level-dot" class="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-sky-600"></span>
+                <span id="status-level-text">Sensor: Nivel normal</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ÁREA PRINCIPAL: ESCENA 3D + CONTROLES -->
+    <main class="relative flex-1 w-full h-full overflow-hidden">
+
+        <!-- CONTENEDOR DEL LIENZO 3D -->
+        <div id="canvas-container">
+            <!-- Etiquetas de sentido de circulación y ubicación de bomba sumergible -->
+            <div id="label-upper-slope" class="floating-tag bg-white/90 backdrop-blur-sm border border-sky-400 text-sky-950 font-semibold">
+                Canal sup. (88 ➔ 85 cm): flujo hacia la derecha ➔
+            </div>
+            <div id="label-lower-slope" class="floating-tag bg-white/90 backdrop-blur-sm border border-sky-400 text-sky-950 font-semibold">
+                ⬅ Canal inf. (55 ➔ 52 cm): flujo hacia la izquierda
+            </div>
+            <div id="label-pump" class="floating-tag bg-slate-900/90 backdrop-blur-sm border border-cyan-400 text-cyan-100 font-semibold flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block"></span>
+                <span>Bomba sumergible</span>
+            </div>
+
+            <!-- ETIQUETAS DE LÍNEAS DE COTA (Distribuidas en el perímetro exterior para no superponerse a la estructura) -->
+            <div id="cota-struct-width" class="cota-tag bg-slate-900/90 text-white font-semibold border border-amber-400/80">
+                Ancho: 90 cm
+            </div>
+            <div id="cota-struct-depth" class="cota-tag bg-slate-900/90 text-white font-semibold border border-amber-400/80">
+                Prof.: 45 cm
+            </div>
+            <div id="cota-struct-height" class="cota-tag bg-slate-900/90 text-white font-semibold border border-amber-400/80">
+                Alto: 100 cm
+            </div>
+            <div id="cota-channel-dim" class="cota-tag bg-indigo-950/90 text-indigo-100 font-semibold border border-indigo-400/80">
+                Canales PVC: 80 cm · Ø 110 mm
+            </div>
+            <div id="cota-plant-spacing" class="cota-tag bg-emerald-950/90 text-emerald-100 font-semibold border border-emerald-400/80">
+                Entre plantines: 30 cm
+            </div>
+            <div id="cota-h-88" class="cota-tag bg-sky-950/90 text-sky-100 font-semibold border border-sky-400/80">
+                Izq. sup.: 88 cm
+            </div>
+            <div id="cota-h-85" class="cota-tag bg-sky-950/90 text-sky-100 font-semibold border border-sky-400/80">
+                Der. sup.: 85 cm
+            </div>
+            <div id="cota-h-55" class="cota-tag bg-sky-950/90 text-sky-100 font-semibold border border-sky-400/80">
+                Der. inf.: 55 cm
+            </div>
+            <div id="cota-h-52" class="cota-tag bg-sky-950/90 text-sky-100 font-semibold border border-sky-400/80">
+                Izq. inf.: 52 cm
+            </div>
+            <div id="cota-reservoir" class="cota-tag bg-slate-800/90 text-amber-200 font-semibold border border-amber-300/80">
+                Depósito opaco con tapa: 20 L
+            </div>
+        </div>
+
+        <!-- CARTEL DE ALERTA CUANDO ALCANZA EL NIVEL MÍNIMO Y SE ENCIENDE LA LUZ DE AVISO -->
+        <div id="low-level-alert" class="hidden low-level-banner absolute top-2.5 left-1/2 -translate-x-1/2 z-30 bg-red-600 text-white px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl shadow-xl border-2 border-red-200 flex items-center gap-2.5 max-w-[92vw]">
+            <span class="w-3.5 h-3.5 rounded-full bg-amber-300 animate-ping shrink-0"></span>
+            <div class="flex flex-col sm:flex-row sm:items-center sm:gap-2">
+                <span class="text-xs sm:text-sm font-extrabold tracking-tight">
+                    Nivel bajo. Rellenar el depósito
+                </span>
+                <span class="text-[10px] sm:text-xs font-bold bg-red-800/90 text-amber-200 px-2 py-0.5 rounded-md border border-red-400">
+                    Luz de aviso encendida por el sensor
+                </span>
+            </div>
+        </div>
+
+        <!-- BANNER EXPLICATIVO INTERACTIVO: «VER SOLUCIÓN NUTRITIVA» -->
+        <div id="nutrient-solution-banner" class="hidden absolute top-2.5 left-1/2 -translate-x-1/2 z-30 w-[92%] max-w-xl bg-teal-950/95 backdrop-blur-md text-teal-50 border border-teal-400 rounded-xl px-3.5 py-2.5 shadow-lg transition-all duration-200">
+            <div class="flex items-start justify-between gap-2.5">
+                <div class="flex items-start gap-2">
+                    <span class="mt-0.5 w-2.5 h-2.5 rounded-full bg-teal-400 shrink-0 animate-pulse"></span>
+                    <div>
+                        <div class="text-[11px] sm:text-xs font-extrabold uppercase tracking-wider text-teal-300">
+                            Recorrido de la solución nutritiva destacado
+                        </div>
+                        <p class="text-xs sm:text-sm font-medium text-white leading-snug mt-0.5">
+                            La solución nutritiva contiene agua y nutrientes minerales que las raíces absorben para crecer.
+                        </p>
+                    </div>
+                </div>
+                <button id="btn-close-nutrient-banner" class="shrink-0 text-teal-200 hover:text-white bg-teal-900/80 hover:bg-teal-800 px-2 py-1 rounded-lg text-[11px] font-bold border border-teal-700 transition" title="Ocultar explicación">
+                    Ocultar
+                </button>
+            </div>
+        </div>
+
+        <!-- VENTANA INFORMATIVA PEQUEÑA: BOTÓN «NUTRIENTES» -->
+        <div id="nutrients-info-modal" class="hidden absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 w-[92%] max-w-md bg-white/98 backdrop-blur-md border-2 border-teal-600 rounded-2xl p-4 shadow-2xl">
+            <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
+                <div class="flex items-center gap-2">
+                    <span class="w-7 h-7 rounded-lg bg-teal-100 text-teal-800 flex items-center justify-center font-extrabold text-sm">
+                        💧
+                    </span>
+                    <h2 class="text-sm sm:text-base font-extrabold text-slate-900 tracking-wide">
+                        SOLUCIÓN NUTRITIVA
+                    </h2>
+                </div>
+                <button id="btn-close-nutrients-modal" class="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 transition" title="Cerrar ventana">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <p class="mt-2.5 text-xs sm:text-sm text-slate-700 font-medium leading-relaxed">
+                La solución nutritiva aporta los nutrientes minerales necesarios para el crecimiento de las plantas. La bomba permite que circule desde el depósito hasta las raíces y regrese nuevamente al recipiente.
+            </p>
+
+            <!-- Pequeño esquema visual del recorrido -->
+            <div class="mt-3 bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+                <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5 text-center">
+                    Esquema visual del circuito de recirculación
+                </div>
+                <svg viewBox="0 0 360 145" class="w-full h-auto" aria-label="Esquema del recorrido de la solución nutritiva">
+                    <!-- Manguera de impulsión (subida izquierda) -->
+                    <path d="M 55 112 L 32 112 L 32 26 L 78 26" fill="none" stroke="#0284c7" stroke-width="3.5" stroke-dasharray="4 2" />
+                    <polygon points="78,22 86,26 78,30" fill="#0284c7" />
+                    <!-- Canal superior (izq a der) -->
+                    <rect x="86" y="16" width="190" height="20" rx="6" fill="#e0f2fe" stroke="#0369a1" stroke-width="1.8" />
+                    <text x="181" y="29" text-anchor="middle" font-size="9.5" font-weight="700" fill="#0c4a6e">2. Canal superior PVC (raíces) ➔</text>
+                    <!-- Plantines superiores -->
+                    <circle cx="135" cy="12" r="6" fill="#16a34a" />
+                    <circle cx="225" cy="12" r="6" fill="#16a34a" />
+                    <!-- Conexión entre niveles (bajada derecha) -->
+                    <path d="M 276 26 L 308 26 L 308 68 L 284 68" fill="none" stroke="#0284c7" stroke-width="3.5" />
+                    <polygon points="284,64 276,68 284,72" fill="#0284c7" />
+                    <!-- Canal inferior (der a izq) -->
+                    <rect x="86" y="58" width="190" height="20" rx="6" fill="#e0f2fe" stroke="#0369a1" stroke-width="1.8" />
+                    <text x="181" y="71" text-anchor="middle" font-size="9.5" font-weight="700" fill="#0c4a6e">⬅ 3. Canal inferior PVC (raíces)</text>
+                    <!-- Plantines inferiores -->
+                    <circle cx="135" cy="54" r="6" fill="#16a34a" />
+                    <circle cx="225" cy="54" r="6" fill="#16a34a" />
+                    <!-- Retorno al depósito -->
+                    <path d="M 86 68 L 62 68 L 62 94" fill="none" stroke="#0d9488" stroke-width="3.5" />
+                    <polygon points="58,92 62,100 66,92" fill="#0d9488" />
+                    <!-- Depósito 20 L + Bomba sumergible -->
+                    <rect x="52" y="100" width="175" height="36" rx="6" fill="#1e293b" stroke="#0f172a" stroke-width="1.8" />
+                    <rect x="56" y="110" width="167" height="22" rx="4" fill="#0284c7" opacity="0.85" />
+                    <!-- Bomba sumergible dentro del depósito -->
+                    <rect x="62" y="115" width="36" height="14" rx="3" fill="#0f172a" stroke="#38bdf8" stroke-width="1.2" />
+                    <text x="80" y="125" text-anchor="middle" font-size="7.5" font-weight="700" fill="#bae6fd">Bomba</text>
+                    <text x="160" y="124" text-anchor="middle" font-size="9" font-weight="700" fill="#ffffff">1. Depósito 20 L (Solución)</text>
+                    <!-- Etiquetas laterales -->
+                    <text x="29" y="72" text-anchor="middle" font-size="8" font-weight="700" fill="#0369a1" transform="rotate(-90 29 72)">Impulsión</text>
+                    <text x="322" y="50" text-anchor="middle" font-size="8" font-weight="700" fill="#0369a1">Bajada</text>
+                    <text x="102" y="92" text-anchor=" start" font-size="8" font-weight="700" fill="#0f766e">4. Retorno</text>
+                </svg>
+            </div>
+
+            <div class="mt-3 flex justify-end">
+                <button id="btn-accept-nutrients-modal" class="py-1.5 px-4 rounded-xl font-bold text-xs bg-teal-700 hover:bg-teal-800 text-white shadow-sm transition">
+                    Entendido
+                </button>
+            </div>
+        </div>
+
+        <!-- TARJETA INFORMATIVA DE PIEZA SELECCIONADA -->
+        <div id="part-info-card" class="hidden absolute top-12 sm:top-14 left-1/2 -translate-x-1/2 z-30 w-[92%] max-w-xl bg-white/95 backdrop-blur-md border-2 border-emerald-600 rounded-2xl p-3 sm:p-3.5 shadow-xl transition-all duration-200">
+            <div class="flex items-start justify-between gap-2.5">
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 font-bold text-xs shrink-0">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </span>
+                    <div>
+                        <h2 id="part-info-title" class="text-sm sm:text-base font-extrabold text-slate-900">
+                            Nombre de la pieza
+                        </h2>
+                        <span id="part-info-tech" class="text-[11px] font-semibold text-emerald-700"></span>
+                    </div>
+                </div>
+                <button id="btn-close-info" class="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 transition" title="Cerrar descripción">
+                    <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <p id="part-info-desc" class="mt-1.5 text-xs sm:text-sm text-slate-700 font-medium leading-snug">
+                Explicación de su función.
+            </p>
+
+            <!-- Panel adicional exclusivo cuando se selecciona el Temporizador -->
+            <div id="timer-demo-panel" class="hidden mt-2.5 pt-2.5 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-amber-50/90 p-2 rounded-xl border border-amber-200">
+                <div class="text-[11px] text-slate-700 space-y-0.5">
+                    <div class="font-extrabold text-amber-900 uppercase tracking-wide">
+                        Demostración acelerada (Separada de tiempos reales)
+                    </div>
+                    <div>
+                        • <b>Cultivo real:</b> p. ej., 15 min encendida / 45 min apagada.<br>
+                        • <b>Demo en aula:</b> alterna 6 s encendida / 4,5 s apagada.
+                    </div>
+                </div>
+                <button id="btn-card-timer-demo" class="shrink-0 py-1.5 px-3 rounded-lg font-bold text-xs bg-amber-600 hover:bg-amber-700 text-white shadow transition">
+                    Iniciar demostración acelerada
+                </button>
+            </div>
+        </div>
+
+        <!-- RESUMEN DE MEDIDAS PROPUESTAS (Arriba a la izquierda, solo en pantallas grandes para no saturar celulares) -->
+        <div id="dimensions-summary-card" class="hidden xl:flex flex-col gap-0.5 absolute top-2.5 left-2.5 z-20 bg-white/85 backdrop-blur-sm border border-slate-200/90 rounded-xl px-2.5 py-2 text-[10.5px] text-slate-700 shadow-sm max-w-[215px]">
+            <div class="font-extrabold text-slate-900 uppercase tracking-wider text-[9.5px] border-b border-slate-200 pb-0.5 mb-0.5">
+                Dimensiones del diseño
+            </div>
+            <div>• <b>Estructura:</b> 90 × 45 × 100 cm</div>
+            <div>• <b>Canales PVC (×2):</b> 80 cm · Ø 110 mm</div>
+            <div>• <b>Plantines (×4):</b> a 30 cm entre centros</div>
+            <div>• <b>Nivel sup.:</b> 88 cm (izq.) ➔ 85 cm (der.)</div>
+            <div>• <b>Nivel inf.:</b> 55 cm (der.) ➔ 52 cm (izq.)</div>
+            <div>• <b>Depósito opaco:</b> 20 L con bomba</div>
+        </div>
+
+        <!-- AYUDA DE EXPLORACIÓN 3D (Arriba a la derecha en escritorio) -->
+        <div id="exploration-help-card" class="hidden lg:flex flex-col gap-0.5 absolute top-2.5 right-2.5 z-20 bg-white/85 backdrop-blur-sm border border-slate-200/90 rounded-xl px-2.5 py-2 text-[10.5px] text-slate-600 shadow-sm max-w-[215px]">
+            <div class="font-bold text-slate-800 flex items-center justify-between gap-2">
+                <span>Exploración 3D</span>
+                <span class="text-[9.5px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">Interactivo</span>
+            </div>
+            <div>• <b>Girar:</b> arrastrar (mouse o 1 dedo)</div>
+            <div>• <b>Zoom:</b> rueda o pellizcar (2 dedos)</div>
+            <div>• <b>Piezas:</b> tocar el modelo 3D o botones</div>
+        </div>
+
+        <!-- PANEL DE CONTROLES INFERIOR COMPACTO Y RESPONSIVO -->
+        <section id="bottom-controls" class="absolute bottom-1 sm:bottom-1.5 left-1/2 -translate-x-1/2 z-20 w-[99%] max-w-[1400px] bg-white/95 backdrop-blur-md border border-slate-300 rounded-xl sm:rounded-2xl shadow-xl p-1 sm:p-1.5 transition-all">
+            <div class="grid grid-cols-2 lg:grid-cols-[0.96fr_1.10fr_1.12fr_1.12fr_1.70fr] gap-1 sm:gap-1.5 items-stretch">
+
+                <!-- 1. BOMBA Y TEMPORIZADOR -->
+                <div class="col-span-1 lg:col-span-1 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl p-1 sm:p-1.5 flex flex-col justify-between">
+                    <div class="flex items-center justify-between gap-1 mb-1">
+                        <span class="text-[8.5px] sm:text-[9px] font-extrabold uppercase tracking-wider text-slate-500">
+                            1. Bomba y riego
+                        </span>
+                        <span id="flow-state-badge" class="text-[8.5px] sm:text-[9px] font-semibold px-1 py-0.5 rounded bg-slate-200 text-slate-700 shrink-0">
+                            Detenida
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-1">
+                        <button id="btn-pump-toggle" class="py-1 sm:py-1.5 px-1 rounded-lg font-bold text-[9.5px] sm:text-[10px] text-white bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] transition shadow-sm flex items-center justify-center text-center leading-tight">
+                            <span id="btn-pump-label">Encender bomba</span>
+                        </button>
+                        <button id="btn-timer-demo" class="py-1 sm:py-1.5 px-1 rounded-lg font-bold text-[9.5px] sm:text-[10px] bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 active:scale-[0.99] transition flex items-center justify-center text-center leading-tight" title="Demostración acelerada del temporizador">
+                            <span id="btn-timer-demo-label">Demo acelerada</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 2. NIVEL DEL DEPÓSITO (20 L) Y SOLUCIÓN NUTRITIVA -->
+                <div class="col-span-1 lg:col-span-1 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl p-1 sm:p-1.5 flex flex-col justify-between">
+                    <div class="flex items-center justify-between gap-1 mb-1">
+                        <span class="text-[8.5px] sm:text-[9px] font-extrabold uppercase tracking-wider text-slate-500">
+                            2. Depósito 20 L
+                        </span>
+                        <span id="level-percent-badge" class="text-[8px] sm:text-[9px] font-bold text-sky-800 bg-sky-100 px-1 py-0.5 rounded shrink-0">
+                            20 L · Normal
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-1">
+                        <button id="btn-drop-level" class="py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[10px] text-amber-950 bg-amber-400 hover:bg-amber-500 active:scale-[0.99] transition shadow-sm leading-tight" title="Simular descenso al nivel mínimo">
+                            Bajar al mín.
+                        </button>
+                        <button id="btn-refill-level" class="py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[10px] text-white bg-sky-600 hover:bg-sky-700 active:scale-[0.99] transition shadow-sm leading-tight" title="Rellenar depósito de 20 litros">
+                            Rellenar 20 L
+                        </button>
+                        <button id="btn-toggle-nutrient-view" class="py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[10px] text-teal-950 bg-teal-100 hover:bg-teal-200 border border-teal-400 active:scale-[0.99] transition leading-tight" title="Destacar la solución nutritiva en el depósito, mangueras y canales">
+                            Ver solución nutritiva
+                        </button>
+                        <button id="btn-nutrients-info" class="py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[10px] text-white bg-teal-700 hover:bg-teal-800 active:scale-[0.99] transition shadow-sm leading-tight" title="Información sobre la solución nutritiva y su recorrido">
+                            Nutrientes
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 3. CARTELES 3D, MEDIDAS, VISTA INTERIOR Y CÁMARA -->
+                <div class="col-span-1 lg:col-span-1 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl p-1 sm:p-1.5 flex flex-col justify-between">
+                    <span class="text-[8.5px] sm:text-[9px] font-extrabold uppercase tracking-wider text-slate-500 mb-1 block">
+                        3. Vista y medidas
+                    </span>
+                    <div class="grid grid-cols-2 gap-1">
+                        <button id="btn-toggle-labels" class="py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[10px] bg-sky-700 text-white hover:bg-sky-800 transition shadow-sm leading-tight">
+                            Ocultar carteles 3D
+                        </button>
+                        <button id="btn-toggle-measures" class="py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[10px] bg-slate-800 text-amber-300 hover:bg-slate-900 transition shadow-sm leading-tight">
+                            Ocultar medidas
+                        </button>
+                        <button id="btn-toggle-interior" class="py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[10px] bg-indigo-600 text-white hover:bg-indigo-700 transition shadow-sm leading-tight">
+                            Vista: Interior
+                        </button>
+                        <button id="btn-reset-camera" class="py-1 px-1 rounded-lg font-semibold text-[9px] sm:text-[10px] bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 transition leading-tight">
+                            Vista inicial
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 4. IDENTIFICAR LAS PIEZAS -->
+                <div class="col-span-1 lg:col-span-1 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl p-1 sm:p-1.5 flex flex-col justify-between">
+                    <span class="text-[8.5px] sm:text-[9px] font-extrabold uppercase tracking-wider text-slate-500 mb-1 block">
+                        4. Componentes
+                    </span>
+                    <div class="grid grid-cols-3 gap-1">
+                        <button data-part="bomba" class="part-btn py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[10px] bg-white border border-slate-300 text-slate-800 hover:bg-emerald-50 hover:border-emerald-400 transition leading-tight">
+                            Bomba
+                        </button>
+                        <button data-part="canales" class="part-btn py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[10px] bg-white border border-slate-300 text-slate-800 hover:bg-emerald-50 hover:border-emerald-400 transition leading-tight">
+                            Canales
+                        </button>
+                        <button data-part="deposito" class="part-btn py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[10px] bg-white border border-slate-300 text-slate-800 hover:bg-emerald-50 hover:border-emerald-400 transition leading-tight">
+                            Depósito
+                        </button>
+                        <button data-part="sensor" class="part-btn py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[10px] bg-white border border-slate-300 text-slate-800 hover:bg-emerald-50 hover:border-emerald-400 transition leading-tight">
+                            Sensor
+                        </button>
+                        <button data-part="temporizador" class="part-btn py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[10px] bg-white border border-slate-300 text-slate-800 hover:bg-emerald-50 hover:border-emerald-400 transition leading-tight col-span-2">
+                            Temporizador
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 5. CRECIMIENTO DE LAS PLANTAS -->
+                <div class="col-span-2 lg:col-span-1 bg-emerald-50/90 border border-emerald-300 rounded-lg sm:rounded-xl p-1 sm:p-1.5 flex flex-col justify-between">
+                    <div class="flex items-center justify-between gap-1 mb-0.5">
+                        <div class="flex items-center gap-1">
+                            <span id="growth-banner-dot" class="w-2 h-2 rounded-full bg-emerald-600 shrink-0"></span>
+                            <span class="text-[8.5px] sm:text-[9px] font-extrabold uppercase tracking-wider text-emerald-950">
+                                5. CRECIMIENTO DE LAS PLANTAS
+                            </span>
+                        </div>
+                        <span id="growth-time-label" class="text-[8.5px] sm:text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-200 text-emerald-950 tabular-nums shrink-0">
+                            0%
+                        </span>
+                    </div>
+
+                    <!-- Indicador de progreso con tres etapas: 1. Plantín | 2. Crecimiento | 3. Lechuga desarrollada -->
+                    <div class="grid grid-cols-3 gap-0.5 text-center text-[8px] sm:text-[8.5px] font-bold mb-0.5">
+                        <div id="stage-pill-1" class="py-0.5 px-1 rounded bg-emerald-600 text-white shadow-sm transition">
+                            1. Plantín
+                        </div>
+                        <div id="stage-pill-2" class="py-0.5 px-1 rounded bg-white/80 text-slate-500 border border-slate-200 transition">
+                            2. Crecimiento
+                        </div>
+                        <div id="stage-pill-3" class="py-0.5 px-1 rounded bg-white/80 text-slate-500 border border-slate-200 transition">
+                            3. Lechuga desarrollada
+                        </div>
+                    </div>
+
+                    <div class="w-full h-1 bg-emerald-200/80 rounded-full overflow-hidden mb-1">
+                        <div id="growth-progress-bar" class="h-full bg-emerald-600 transition-all duration-100" style="width: 0%"></div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-1 mb-0.5">
+                        <button id="btn-growth-start" class="py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[9.5px] text-white bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] transition shadow-sm leading-tight">
+                            Simular crecimiento
+                        </button>
+                        <button id="btn-growth-pause" class="py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[9.5px] text-amber-950 bg-amber-200 hover:bg-amber-300 border border-amber-400 active:scale-[0.99] transition leading-tight disabled:opacity-50" disabled>
+                            Pausar
+                        </button>
+                        <button id="btn-growth-reset" class="py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[9.5px] text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 active:scale-[0.99] transition leading-tight">
+                            Reiniciar crecimiento
+                        </button>
+                    </div>
+
+                    <div class="text-[7.5px] sm:text-[8px] text-emerald-900/90 font-medium text-center leading-tight">
+                        Simulación acelerada e ilustrativa del crecimiento. No representa el tiempo real de cultivo.
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // ============================================================================
+        // ESCALA GEOMÉTRICA EXACTA DEL PROYECTO: 1 unidad 3D = 10 cm (0.1 u = 1 cm)
+        // Suelo en Y = 0.0
+        // - Estructura: 90 cm ancho (X: -4.5 a +4.5), 45 cm prof. (Z: -2.25 a +2.25), 100 cm alto (Y: 0 a 10.0)
+        // - 2 Canales PVC: 80 cm largo (X: -4.0 a +4.0), Ø 110 mm (11 cm -> radio = 0.55 u)
+        // - 2 plantines por canal separados 30 cm entre centros (X = -1.5 u y X = +1.5 u)
+        // - Canal superior: extremo izq. a 88 cm (Y = 8.8) y extremo der. a 85 cm (Y = 8.5)
+        // - Canal inferior: extremo der. a 55 cm (Y = 5.5) y extremo izq. a 52 cm (Y = 5.2)
+        // - Depósito opaco con tapa de 20 L nominales debajo de los canales
+        // ============================================================================
+
+        const PART_DESCRIPTIONS = {
+            bomba: {
+                title: "Bomba sumergible y manguera de impulsión",
+                tech: "Sumergida en el fondo del depósito de 20 L · Impulsión hasta 88 cm",
+                sentence: "Permanece sumergida en la parte inferior del depósito e impulsa la solución nutritiva por la manguera hasta el extremo izquierdo del canal superior."
+            },
+            canales: {
+                title: "Canales de PVC y plantines de lechuga",
+                tech: "2 tubos de 80 cm de largo y Ø 110 mm · 4 plantines separados 30 cm entre centros",
+                sentence: "Conducen una lámina poco profunda de solución nutritiva por gravedad desde el nivel superior (88 a 85 cm) hacia el nivel inferior (55 a 52 cm) bañando las raíces."
+            },
+            deposito: {
+                title: "Depósito opaco con tapa (20 litros)",
+                tech: "Capacidad nominal: 20 L · Material oscuro opaco para impedir el paso de luz y algas",
+                sentence: "Almacena la solución nutritiva en la base del sistema, aloja la bomba sumergible y el sensor de nivel, y recibe el líquido por el conducto de retorno."
+            },
+            sensor: {
+                title: "Sensor de nivel y luz de aviso",
+                tech: "Detección de umbral mínimo dentro del depósito · Alerta luminosa exterior",
+                sentence: "Detecta cuando la solución nutritiva desciende hasta el nivel mínimo de seguridad y enciende automáticamente la luz de aviso para indicar que se debe rellenar el depósito."
+            },
+            temporizador: {
+                title: "Temporizador programable",
+                tech: "Control automático de ciclos de riego · Incluye «Demostración acelerada»",
+                sentence: "Automatiza el encendido y apagado periódico de la bomba para oxigenar y nutrir las raíces sin requerir intervención manual constante."
+            }
+        };
+
+        // En dispositivos móviles (< 768 px), los carteles comienzan ocultos inicialmente
+        const isInitialMobile = window.innerWidth < 768;
+
+        // ============================================================================
+        // ESTADO GLOBAL DE LA SIMULACIÓN
+        // ============================================================================
+        const simState = {
+            pumpOn: false,
+            // Demostración acelerada del temporizador (separada de los tiempos reales)
+            acceleratedDemoActive: false,
+            demoTimerClock: 0,
+            demoOnDuration: 6.0,   // 6 segundos encendida en la demostración acelerada
+            demoOffDuration: 4.5,  // 4.5 segundos apagada
+            // Tramo activo de solución en el circuito [flowTail, flowHead] en [0, 1]
+            // 0.00 -> 0.22: Manguera de impulsión (subida hasta X=-3.68, Y=8.8)
+            // 0.22 -> 0.52: Canal superior (izq. 88 cm -> der. 85 cm)
+            // 0.52 -> 0.62: Conexión entre niveles (bajada der. 85 cm -> 55 cm)
+            // 0.62 -> 0.90: Canal inferior (der. 55 cm -> izq. 52 cm)
+            // 0.90 -> 1.00: Retorno al depósito (izq. 52 cm -> tapa del depósito)
+            flowHead: 0.0,
+            flowTail: 0.0,
+            // Nivel de líquido en el depósito (0.26 = mínimo donde actúa el sensor, 0.84 = 20 L lleno normal)
+            waterLevel: 0.84,
+            targetWaterLevel: 0.84,
+            minWaterLevel: 0.26,
+            normalWaterLevel: 0.84,
+            // Vista interior semitransparente vs Vista exterior con depósito opaco y tapa
+            semitransparentView: true,
+            // Mostrar líneas de cota con medidas propuestas
+            showMeasures: !isInitialMobile,
+            // Mostrar carteles 3D informativos
+            showLabels: !isInitialMobile,
+            // Opción interactiva «Ver solución nutritiva»
+            nutrientViewActive: false,
+            // Simulación animada del crecimiento de las 4 lechugas (0.0 = Plantín inicial, 1.0 = Lechuga desarrollada en ~15 s)
+            growthProgress: 0.0,
+            growthDuration: 15.0,
+            growthPlaying: false,
+            growthPaused: false,
+            // Pieza seleccionada actualmente
+            selectedPart: null
+        };
+
+        // ============================================================================
+        // VARIABLES THREE.JS
+        // ============================================================================
+        let scene, camera, renderer, container, raycaster, mouse;
+
+        // Cámara orbital adaptativa para observar la huerta completa en PC y celular
+        const cameraControl = {
+            theta: 0.12,
+            phi: 1.38,
+            radius: 21.5,
+            target: new THREE.Vector3(0, 4.2, 0),
+            defaultTheta: 0.12,
+            defaultPhi: 1.38,
+            defaultRadius: 21.5,
+            defaultTarget: new THREE.Vector3(0, 4.2, 0),
+            isDragging: false,
+            prevX: 0,
+            prevY: 0,
+            pointerDownX: 0,
+            pointerDownY: 0,
+            pinchDistance: 0
+        };
+
+        // Referencias a los grupos de paredes del aula/taller para ocultamiento dinámico según cámara
+        const classroomWalls = {
+            back: null,
+            left: null,
+            right: null,
+            front: null
+        };
+
+        const materials = {};
+        const selectableMeshes = [];
+        const partGroups = {
+            bomba: [],
+            canales: [],
+            deposito: [],
+            sensor: [],
+            temporizador: []
+        };
+
+        // Referencias a mallas dinámicas
+        let reservoirWaterMesh;
+        let reservoirWaterSurfaceMesh;
+        let sensorFloatCollarGroup;
+        let warningLightBulbMesh;
+        let warningLightHaloMesh;
+        let warningPointLight;
+        let timerLedMesh;
+        let timerScreenMat;
+        let upperWaterStreamMesh;
+        let lowerWaterStreamMesh;
+        let risingHoseWaterMesh;
+        let midConnectorWaterMesh;
+        let returnPipeWaterMesh;
+        let pumpVibrationRing;
+        let pumpSecondRing;
+        let pumpLeaderLine;
+        let dimensionsGroup;
+        let nutrientHighlightGroup;
+        const reservoirMineralDots = [];
+        const pumpBubbles = [];
+        const lettucePlants = [];
+        const lettuceLeafGeos = {};
+
+        // Partículas de circulación
+        const flowParticles = [];
+        const NUM_FLOW_PARTICLES = 56;
+        let hoseCurveGlobal, returnCurveGlobal, midCurveGlobal;
+
+        // Puntos 3D ubicados estratégicamente para evitar superposición sobre la estructura
+        const labelAnchors = {
+            upperSlope: new THREE.Vector3(0.0, 7.68, 0.45),
+            lowerSlope: new THREE.Vector3(2.45, 3.85, 0.85),
+            pump: new THREE.Vector3(-4.85, 1.35, 1.55)
+        };
+
+        const cotaAnchors = {
+            'cota-struct-width': new THREE.Vector3(1.9, -0.45, 2.95),
+            'cota-struct-depth': new THREE.Vector3(5.35, -0.2, 0.4),
+            'cota-struct-height': new THREE.Vector3(5.75, 3.1, -2.25),
+            'cota-channel-dim': new THREE.Vector3(0, 10.95, 0),
+            'cota-plant-spacing': new THREE.Vector3(0, 6.72, 0.35),
+            'cota-h-88': new THREE.Vector3(-5.45, 8.8, 0.6),
+            'cota-h-85': new THREE.Vector3(5.45, 8.5, 0.6),
+            'cota-h-55': new THREE.Vector3(5.45, 5.5, 0.6),
+            'cota-h-52': new THREE.Vector3(-5.45, 5.2, 0.6),
+            'cota-reservoir': new THREE.Vector3(-1.35, -0.45, 2.75)
+        };
+
+        // ============================================================================
+        // INICIALIZACIÓN DE LA ESCENA 3D
+        // ============================================================================
+        function initScene() {
+            container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xdce5ed);
+
+            camera = new THREE.PerspectiveCamera(
+                38,
+                container.clientWidth / container.clientHeight,
+                0.1,
+                160
+            );
+            computeResponsiveCameraDefaults();
+            resetCameraView();
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            // Iluminación general blanco cálido neutro (#FFF5E8) equilibrada para conservar los tonos exactos de las paredes
+            const ambientLight = new THREE.AmbientLight(0xfff5e8, 0.56);
+            scene.add(ambientLight);
+
+            const hemiLight = new THREE.HemisphereLight(0xfff5e8, 0xb8b5ad, 0.26);
+            hemiLight.position.set(0, 20, 0);
+            scene.add(hemiLight);
+
+            const dirLight = new THREE.DirectionalLight(0xfff5e8, 0.52);
+            dirLight.position.set(7.5, 16.5, 11.5);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            dirLight.shadow.radius = 3;
+            dirLight.shadow.bias = -0.0004;
+            const d = 14;
+            dirLight.shadow.camera.left = -d;
+            dirLight.shadow.camera.right = d;
+            dirLight.shadow.camera.top = d;
+            dirLight.shadow.camera.bottom = -d;
+            dirLight.shadow.camera.near = 1;
+            dirLight.shadow.camera.far = 45;
+            scene.add(dirLight);
+
+            // Luz de relleno frontal suave para evitar zonas oscuras o contrastes excesivos
+            const fillLight = new THREE.DirectionalLight(0xfff5e8, 0.18);
+            fillLight.position.set(-8, 9, 14);
+            scene.add(fillLight);
+
+            // Construcción del escenario del aula/taller y del modelo 3D con medidas exactas
+            initMaterials();
+            buildClassroomWorkshopEnvironment();
+            buildFloorAndStructure90x45x100();
+            buildOpaqueReservoir20LAndSensor();
+            buildSubmergedPump();
+            buildChannels80cmAndPlants30cm();
+            buildConnectedPlumbingAndStreams();
+            buildNutrientSolutionHighlightVisuals();
+            buildProgrammableTimer();
+            buildTechnicalDimensions3D();
+            buildFlowParticles();
+
+            if (dimensionsGroup) {
+                dimensionsGroup.visible = simState.showMeasures;
+            }
+
+            applyInteriorViewMode();
+            updateWaterAndSensorVisuals();
+            updateNutrientSolutionVisuals();
+            updateLettuceGrowthVisuals(simState.growthProgress);
+            updateGrowthUI();
+            updateUIStatus();
+            syncLabelAndMeasureButtons();
+            updateClassroomWallVisibility();
+
+            setupInteractionEvents();
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        // ============================================================================
+        // MATERIALES (Colores realistas, educativos y con buen contraste)
+        // ============================================================================
+        function initMaterials() {
+            // Paleta del aula/taller de Educación Tecnológica calibrada bajo la luz #FFF5E8:
+            // - Pared posterior: #DCE5ED
+            // - Pared lateral:   #CBD5E1
+            // - Piso mate:       #B8B5AD
+            // - Zócalos:         #64748B
+            materials.backWall = new THREE.MeshStandardMaterial({
+                color: 0xb5c6d6,
+                roughness: 0.94,
+                metalness: 0.01
+            });
+            materials.sideWall = new THREE.MeshStandardMaterial({
+                color: 0xa3b3c4,
+                roughness: 0.94,
+                metalness: 0.01
+            });
+            materials.baseboard = new THREE.MeshStandardMaterial({
+                color: 0x526277,
+                roughness: 0.80,
+                metalness: 0.05
+            });
+            materials.floorGrid = new THREE.MeshStandardMaterial({
+                color: 0x9c9991,
+                roughness: 0.96,
+                metalness: 0.01,
+                map: createMatteWorkshopFloorTexture()
+            });
+            // Estructura portante metálica gris grafito oscuro (90 x 45 x 100 cm)
+            materials.frame = new THREE.MeshStandardMaterial({
+                color: 0x263244,
+                roughness: 0.42,
+                metalness: 0.48
+            });
+            // Tablero de madera natural cálida
+            materials.woodBase = new THREE.MeshStandardMaterial({
+                color: 0xc59b6d,
+                roughness: 0.68,
+                metalness: 0.05
+            });
+            // Canales de PVC blanco (#FFFFFF) con emisión calibrada para diferenciarse claramente del fondo #DCE5ED
+            materials.channelWall = new THREE.MeshPhysicalMaterial({
+                color: 0xffffff,
+                emissive: 0xffffff,
+                emissiveIntensity: 0.48,
+                roughness: 0.18,
+                metalness: 0.01,
+                transparent: true,
+                opacity: 0.66,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            // Accesorios y tapas de PVC gris técnico para diferenciarlos del tubo blanco
+            materials.pvcFitting = new THREE.MeshStandardMaterial({
+                color: 0x94a3b8,
+                roughness: 0.32,
+                metalness: 0.12
+            });
+            // Depósito opaco de 20 L con tapa (azul pizarra oscuro de alta densidad)
+            materials.reservoirWall = new THREE.MeshPhysicalMaterial({
+                color: 0x1e293b,
+                roughness: 0.38,
+                metalness: 0.1,
+                transparent: true,
+                opacity: 0.32,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            materials.reservoirLid = new THREE.MeshPhysicalMaterial({
+                color: 0x0f172a,
+                roughness: 0.42,
+                metalness: 0.12,
+                transparent: true,
+                opacity: 0.42,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            // Solución nutritiva en canales y mangueras
+            materials.nutrientWater = new THREE.MeshStandardMaterial({
+                color: 0x0284c7,
+                emissive: 0x0369a1,
+                emissiveIntensity: 0.22,
+                roughness: 0.15,
+                transparent: true,
+                opacity: 0.82,
+                depthWrite: false
+            });
+            // Volumen de solución nutritiva dentro del depósito (más translúcido para distinguir con nitidez la bomba sumergida)
+            materials.reservoirWaterVol = new THREE.MeshStandardMaterial({
+                color: 0x0284c7,
+                emissive: 0x0369a1,
+                emissiveIntensity: 0.18,
+                roughness: 0.15,
+                transparent: true,
+                opacity: 0.36,
+                depthWrite: false
+            });
+            materials.waterSurface = new THREE.MeshStandardMaterial({
+                color: 0x38bdf8,
+                emissive: 0x0284c7,
+                emissiveIntensity: 0.22,
+                roughness: 0.12,
+                transparent: true,
+                opacity: 0.72,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            // Bomba sumergible con alto contraste para identificarla dentro del depósito
+            materials.pumpBody = new THREE.MeshStandardMaterial({
+                color: 0x1e3a5f,
+                roughness: 0.28,
+                metalness: 0.45
+            });
+            materials.pumpAccent = new THREE.MeshStandardMaterial({
+                color: 0x06b6d4,
+                emissive: 0x0891b2,
+                emissiveIntensity: 0.18,
+                roughness: 0.25,
+                metalness: 0.25
+            });
+            materials.pumpBadge = new THREE.MeshStandardMaterial({
+                color: 0xf59e0b,
+                roughness: 0.3,
+                metalness: 0.1
+            });
+            // Mangueras y conductos de conexión/retorno (gris azulado translúcido técnico)
+            materials.pipeWall = new THREE.MeshPhysicalMaterial({
+                color: 0x475569,
+                roughness: 0.24,
+                transparent: true,
+                opacity: 0.46,
+                depthWrite: false
+            });
+            // Sensor de nivel y luz de aviso
+            materials.sensorStem = new THREE.MeshStandardMaterial({
+                color: 0xe2e8f0,
+                roughness: 0.25,
+                metalness: 0.6
+            });
+            materials.sensorFloat = new THREE.MeshStandardMaterial({
+                color: 0xf97316,
+                roughness: 0.25,
+                metalness: 0.1
+            });
+            materials.minLevelMark = new THREE.MeshStandardMaterial({
+                color: 0xdc2626,
+                emissive: 0x991b1b,
+                emissiveIntensity: 0.3,
+                roughness: 0.25
+            });
+            materials.warningBeaconOff = new THREE.MeshStandardMaterial({
+                color: 0x7f1d1d,
+                emissive: 0x000000,
+                emissiveIntensity: 0,
+                roughness: 0.2,
+                transparent: true,
+                opacity: 0.85
+            });
+            // Temporizador programable
+            materials.timerBox = new THREE.MeshStandardMaterial({
+                color: 0xf8fafc,
+                roughness: 0.3,
+                metalness: 0.1
+            });
+            materials.timerAccent = new THREE.MeshStandardMaterial({
+                color: 0x1e293b,
+                roughness: 0.4
+            });
+            // Plantines de lechuga (tonalidades verdes realistas con variación por vértice) y raíces
+            materials.netPot = new THREE.MeshStandardMaterial({
+                color: 0x1c1917,
+                roughness: 0.65
+            });
+            materials.lettuceHeart = new THREE.MeshStandardMaterial({
+                color: 0xa3e635,
+                roughness: 0.42,
+                side: THREE.DoubleSide,
+                vertexColors: true
+            });
+            materials.lettuceInner = new THREE.MeshStandardMaterial({
+                color: 0x4ade80,
+                roughness: 0.44,
+                side: THREE.DoubleSide,
+                vertexColors: true
+            });
+            materials.lettuceMid = new THREE.MeshStandardMaterial({
+                color: 0x22c55e,
+                roughness: 0.48,
+                side: THREE.DoubleSide,
+                vertexColors: true
+            });
+            materials.lettuceOuter = new THREE.MeshStandardMaterial({
+                color: 0x15803d,
+                roughness: 0.52,
+                side: THREE.DoubleSide,
+                vertexColors: true
+            });
+            materials.roots = new THREE.MeshStandardMaterial({
+                color: 0xfef08a,
+                emissive: 0xfde047,
+                emissiveIntensity: 0.08,
+                roughness: 0.70
+            });
+        }
+
+        function registerSelectable(mesh, partKey) {
+            mesh.userData.partKey = partKey;
+            selectableMeshes.push(mesh);
+            if (partGroups[partKey]) {
+                partGroups[partKey].push(mesh);
+            }
+        }
+
+        // ============================================================================
+        // TEXTURAS PROCEDURALES Y ESCENARIO 3D DEL AULA/TALLER DE EDUCACIÓN TECNOLÓGICA
+        // ============================================================================
+        function createMatteWorkshopFloorTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            // Base gris cálido mate (#B8B5AD)
+            ctx.fillStyle = '#B8B5AD';
+            ctx.fillRect(0, 0, 512, 512);
+
+            // Ligera textura mineral mate de piso escolar/taller
+            for (let i = 0; i < 4200; i++) {
+                const x = Math.random() * 512;
+                const y = Math.random() * 512;
+                const s = 1 + Math.random() * 2;
+                ctx.fillStyle = i % 2 === 0 ? 'rgba(255, 255, 255, 0.035)' : 'rgba(71, 85, 105, 0.04)';
+                ctx.fillRect(x, y, s, s);
+            }
+
+            // Juntas sutiles de baldosones mates de taller
+            ctx.strokeStyle = 'rgba(100, 116, 139, 0.14)';
+            ctx.lineWidth = 2;
+            for (let p = 0; p <= 512; p += 128) {
+                ctx.beginPath();
+                ctx.moveTo(p, 0);
+                ctx.lineTo(p, 512);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(0, p);
+                ctx.lineTo(512, p);
+                ctx.stroke();
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(7, 5);
+            return tex;
+        }
+
+        function createSoftContactShadowTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            const grad = ctx.createRadialGradient(128, 128, 18, 128, 128, 120);
+            grad.addColorStop(0.0, 'rgba(15, 23, 42, 0.34)');
+            grad.addColorStop(0.55, 'rgba(15, 23, 42, 0.16)');
+            grad.addColorStop(1.0, 'rgba(15, 23, 42, 0.0)');
+
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 256, 256);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function createWorkshopSignTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 320;
+            const ctx = canvas.getContext('2d');
+
+            // Fondo del cartel institucional del taller
+            ctx.fillStyle = '#F8FAFC';
+            ctx.fillRect(0, 0, 1024, 320);
+
+            // Borde interior pizarra
+            ctx.strokeStyle = '#64748B';
+            ctx.lineWidth = 10;
+            ctx.strokeRect(16, 16, 992, 288);
+
+            // Franja lateral institucional
+            ctx.fillStyle = '#334155';
+            ctx.fillRect(21, 21, 28, 278);
+
+            // Texto principal nítido
+            ctx.fillStyle = '#1E293B';
+            ctx.font = 'bold 54px Inter, system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Taller de Educación Tecnológica', 528, 134);
+
+            // Subtítulo discreto
+            ctx.fillStyle = '#475569';
+            ctx.font = '600 32px Inter, system-ui, sans-serif';
+            ctx.fillText(' Área de Prototipos y Sistemas Hidropónicos ', 528, 212);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.anisotropy = 4;
+            return tex;
+        }
+
+        function buildClassroomWorkshopEnvironment() {
+            const roomGroup = new THREE.Group();
+
+            const roomW = 27.0; // X: -13.5 a +13.5
+            const roomD = 22.0; // Z: -7.2 a +14.8 (centro Z = 3.8)
+            const roomH = 16.5; // Y: 0.0 a 16.5
+            const backZ = -7.2;
+            const frontZ = 14.8;
+            const centerZ = (backZ + frontZ) * 0.5; // 3.8
+            const sideX = roomW * 0.5; // 13.5
+
+            // 1. PISO CONTINUO MATE Y LIGERAMENTE TEXTURIZADO (#B8B5AD) EN Y = 0.0
+            const floorSlab = new THREE.Mesh(
+                new THREE.BoxGeometry(roomW, 0.24, roomD),
+                materials.floorGrid
+            );
+            floorSlab.position.set(0, -0.12, centerZ);
+            floorSlab.receiveShadow = true;
+            roomGroup.add(floorSlab);
+
+            // Sombra de contacto suave debajo de la estructura hidropónica para apoyo firme sobre el piso
+            const contactShadowTex = createSoftContactShadowTexture();
+            const mainContactShadow = new THREE.Mesh(
+                new THREE.PlaneGeometry(10.6, 5.8),
+                new THREE.MeshBasicMaterial({
+                    map: contactShadowTex,
+                    transparent: true,
+                    depthWrite: false
+                })
+            );
+            mainContactShadow.rotation.x = -Math.PI / 2;
+            mainContactShadow.position.set(0, 0.003, 0);
+            roomGroup.add(mainContactShadow);
+
+            // Materiales para mobiliario y detalles minimalistas del aula/taller en segundo plano
+            const shelfMetalMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.65, metalness: 0.3 });
+            const shelfWoodMat = new THREE.MeshStandardMaterial({ color: 0xc8b092, roughness: 0.82, metalness: 0.02 });
+            const boxSlateMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.75 });
+            const boxLightMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.75 });
+            const toolBoxMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.6 });
+            const bookBlueMat = new THREE.MeshStandardMaterial({ color: 0x0369a1, roughness: 0.7 });
+            const bookDarkMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.7 });
+            const pvcSpareMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
+
+            // 2. PARED POSTERIOR (#DCE5ED) + ZÓCALO (#64748B) + CARTEL + MOBILIARIO EN SEGUNDO PLANO
+            const backGroup = new THREE.Group();
+            const backWallMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(roomW, roomH, 0.24),
+                materials.backWall
+            );
+            backWallMesh.position.set(0, roomH * 0.5, backZ - 0.12);
+            backWallMesh.receiveShadow = true;
+            backGroup.add(backWallMesh);
+
+            // Zócalo posterior (#64748B) que separa claramente la pared posterior del piso
+            const backBaseboard = new THREE.Mesh(
+                new THREE.BoxGeometry(roomW, 0.44, 0.10),
+                materials.baseboard
+            );
+            backBaseboard.position.set(0, 0.22, backZ + 0.05);
+            backBaseboard.receiveShadow = true;
+            backGroup.add(backBaseboard);
+
+            // Pequeño panel/cartel en la pared con el texto «Taller de Educación Tecnológica»
+            // Ubicado en segundo plano superior derecho (X = +9.8, Y = 8.4) totalmente libre de la estructura y carteles
+            const signGroup = new THREE.Group();
+            signGroup.position.set(9.8, 8.4, backZ + 0.06);
+
+            const signFrame = new THREE.Mesh(
+                new THREE.BoxGeometry(3.9, 1.25, 0.08),
+                shelfMetalMat
+            );
+            signFrame.castShadow = true;
+            signGroup.add(signFrame);
+
+            const signFace = new THREE.Mesh(
+                new THREE.PlaneGeometry(3.76, 1.12),
+                new THREE.MeshBasicMaterial({ map: createWorkshopSignTexture() })
+            );
+            signFace.position.set(0, 0, 0.045);
+            signGroup.add(signFace);
+            backGroup.add(signGroup);
+
+            // Estantería sencilla ubicada lejos del modelo principal (esquina posterior derecha: X = +9.8, Z = -5.8)
+            const shelfGroup = new THREE.Group();
+            shelfGroup.position.set(9.8, 0, -5.8);
+
+            const shW = 3.1;
+            const shD = 1.0;
+            const shH = 5.1;
+
+            // Sombra de contacto de la estantería
+            const shelfShadow = new THREE.Mesh(
+                new THREE.PlaneGeometry(shW + 0.8, shD + 0.8),
+                new THREE.MeshBasicMaterial({ map: contactShadowTex, transparent: true, depthWrite: false })
+            );
+            shelfShadow.rotation.x = -Math.PI / 2;
+            shelfShadow.position.set(0, 0.003, 0);
+            shelfGroup.add(shelfShadow);
+
+            // 4 parantes verticales de la estantería
+            const postCoords = [
+                [-shW * 0.5 + 0.06, -shD * 0.5 + 0.06],
+                [shW * 0.5 - 0.06, -shD * 0.5 + 0.06],
+                [-shW * 0.5 + 0.06, shD * 0.5 - 0.06],
+                [shW * 0.5 - 0.06, shD * 0.5 - 0.06]
+            ];
+            postCoords.forEach(([px, pz]) => {
+                const p = new THREE.Mesh(new THREE.BoxGeometry(0.10, shH, 0.10), shelfMetalMat);
+                p.position.set(px, shH * 0.5, pz);
+                p.castShadow = true;
+                p.receiveShadow = true;
+                shelfGroup.add(p);
+            });
+
+            // 3 estantes horizontales
+            const shelfLevels = [0.45, 2.25, 4.10];
+            shelfLevels.forEach((sy) => {
+                const plank = new THREE.Mesh(new THREE.BoxGeometry(shW, 0.09, shD), shelfWoodMat);
+                plank.position.set(0, sy, 0);
+                plank.castShadow = true;
+                plank.receiveShadow = true;
+                shelfGroup.add(plank);
+            });
+
+            // Elementos escolares y herramientas básicas minimalistas sobre los estantes
+            // Estante 1 (inferior): dos cajas organizadoras de taller
+            const bin1 = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.62, 0.78), boxSlateMat);
+            bin1.position.set(-0.75, 0.45 + 0.35, 0);
+            bin1.castShadow = true;
+            shelfGroup.add(bin1);
+
+            const bin2 = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.62, 0.78), boxLightMat);
+            bin2.position.set(0.65, 0.45 + 0.35, 0);
+            bin2.castShadow = true;
+            shelfGroup.add(bin2);
+
+            // Estante 2: caja de herramientas minimalista + tramo de tubo PVC de repuesto
+            const toolBox = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.48, 0.56), toolBoxMat);
+            toolBox.position.set(-0.68, 2.25 + 0.28, 0.05);
+            toolBox.castShadow = true;
+            shelfGroup.add(toolBox);
+
+            const toolHandle = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.08, 0.08), shelfMetalMat);
+            toolHandle.position.set(-0.68, 2.25 + 0.58, 0.05);
+            shelfGroup.add(toolHandle);
+
+            const sparePvc = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 1.05, 20), pvcSpareMat);
+            sparePvc.rotation.z = Math.PI / 2;
+            sparePvc.position.set(0.75, 2.25 + 0.28, 0);
+            sparePvc.castShadow = true;
+            shelfGroup.add(sparePvc);
+
+            // Estante 3: carpetas/libros escolares verticales y caja técnica
+            [-0.95, -0.78, -0.61].forEach((bx, idx) => {
+                const book = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.13, 0.76, 0.58),
+                    idx === 1 ? bookBlueMat : bookDarkMat
+                );
+                book.position.set(bx, 4.10 + 0.42, 0);
+                book.castShadow = true;
+                shelfGroup.add(book);
+            });
+
+            const smallBox = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.44, 0.65), boxLightMat);
+            smallBox.position.set(0.55, 4.10 + 0.26, 0);
+            smallBox.castShadow = true;
+            shelfGroup.add(smallBox);
+
+            backGroup.add(shelfGroup);
+
+            // Mesa auxiliar minimalista de taller en segundo plano izquierdo (X = -10.6, Z = -5.7) con regla T y cuaderno
+            const benchGroup = new THREE.Group();
+            benchGroup.position.set(-10.6, 0, -5.7);
+
+            const benchW = 2.8;
+            const benchD = 1.15;
+            const benchH = 2.85;
+
+            const benchShadow = new THREE.Mesh(
+                new THREE.PlaneGeometry(benchW + 0.7, benchD + 0.7),
+                new THREE.MeshBasicMaterial({ map: contactShadowTex, transparent: true, depthWrite: false })
+            );
+            benchShadow.rotation.x = -Math.PI / 2;
+            benchShadow.position.set(0, 0.003, 0);
+            benchGroup.add(benchShadow);
+
+            const benchTop = new THREE.Mesh(new THREE.BoxGeometry(benchW, 0.12, benchD), shelfWoodMat);
+            benchTop.position.set(0, benchH, 0);
+            benchTop.castShadow = true;
+            benchTop.receiveShadow = true;
+            benchGroup.add(benchTop);
+
+            [
+                [-benchW * 0.5 + 0.12, -benchD * 0.5 + 0.12],
+                [benchW * 0.5 - 0.12, -benchD * 0.5 + 0.12],
+                [-benchW * 0.5 + 0.12, benchD * 0.5 - 0.12],
+                [benchW * 0.5 - 0.12, benchD * 0.5 - 0.12]
+            ].forEach(([lx, lz]) => {
+                const leg = new THREE.Mesh(new THREE.BoxGeometry(0.10, benchH, 0.10), shelfMetalMat);
+                leg.position.set(lx, benchH * 0.5, lz);
+                leg.castShadow = true;
+                benchGroup.add(leg);
+            });
+
+            // Cuaderno y regla T sobre la mesa auxiliar
+            const notebook = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.06, 0.55), bookBlueMat);
+            notebook.position.set(-0.45, benchH + 0.09, 0.05);
+            notebook.rotation.y = 0.15;
+            benchGroup.add(notebook);
+
+            const tRuleBlade = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.03, 0.10), boxLightMat);
+            tRuleBlade.position.set(0.42, benchH + 0.075, 0);
+            tRuleBlade.rotation.y = -0.22;
+            benchGroup.add(tRuleBlade);
+
+            backGroup.add(benchGroup);
+            roomGroup.add(backGroup);
+            classroomWalls.back = backGroup;
+
+            // 3. PARED LATERAL IZQUIERDA (#CBD5E1) + ZÓCALO (#64748B)
+            const leftGroup = new THREE.Group();
+            const leftWallMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(0.24, roomH, roomD),
+                materials.sideWall
+            );
+            leftWallMesh.position.set(-sideX - 0.12, roomH * 0.5, centerZ);
+            leftWallMesh.receiveShadow = true;
+            leftGroup.add(leftWallMesh);
+
+            const leftBaseboard = new THREE.Mesh(
+                new THREE.BoxGeometry(0.10, 0.44, roomD),
+                materials.baseboard
+            );
+            leftBaseboard.position.set(-sideX + 0.05, 0.22, centerZ);
+            leftBaseboard.receiveShadow = true;
+            leftGroup.add(leftBaseboard);
+            roomGroup.add(leftGroup);
+            classroomWalls.left = leftGroup;
+
+            // 4. PARED LATERAL DERECHA (#CBD5E1) + ZÓCALO (#64748B)
+            const rightGroup = new THREE.Group();
+            const rightWallMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(0.24, roomH, roomD),
+                materials.sideWall
+            );
+            rightWallMesh.position.set(sideX + 0.12, roomH * 0.5, centerZ);
+            rightWallMesh.receiveShadow = true;
+            rightGroup.add(rightWallMesh);
+
+            const rightBaseboard = new THREE.Mesh(
+                new THREE.BoxGeometry(0.10, 0.44, roomD),
+                materials.baseboard
+            );
+            rightBaseboard.position.set(sideX - 0.05, 0.22, centerZ);
+            rightBaseboard.receiveShadow = true;
+            rightGroup.add(rightBaseboard);
+            roomGroup.add(rightGroup);
+            classroomWalls.right = rightGroup;
+
+            // 5. PARED FRONTAL (#DCE5ED) + ZÓCALO (#64748B) (se muestra solo al girar la cámara detrás de la huerta)
+            const frontGroup = new THREE.Group();
+            const frontWallMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(roomW, roomH, 0.24),
+                materials.backWall
+            );
+            frontWallMesh.position.set(0, roomH * 0.5, frontZ + 0.12);
+            frontWallMesh.receiveShadow = true;
+            frontGroup.add(frontWallMesh);
+
+            const frontBaseboard = new THREE.Mesh(
+                new THREE.BoxGeometry(roomW, 0.44, 0.10),
+                materials.baseboard
+            );
+            frontBaseboard.position.set(0, 0.22, frontZ - 0.05);
+            frontGroup.add(frontBaseboard);
+            roomGroup.add(frontGroup);
+            classroomWalls.front = frontGroup;
+
+            scene.add(roomGroup);
+        }
+
+        // Oculta automáticamente cualquier pared que quede entre la cámara y la estructura hidropónica
+        function updateClassroomWallVisibility() {
+            if (!camera || !classroomWalls.back) return;
+            classroomWalls.back.visible = camera.position.z > -4.8;
+            classroomWalls.left.visible = camera.position.x > -10.5;
+            classroomWalls.right.visible = camera.position.x < 10.5;
+            classroomWalls.front.visible = camera.position.z < 10.2;
+        }
+
+        // ============================================================================
+        // 1. ESTRUCTURA DE 90 CM ANCHO × 45 CM PROFUNDIDAD × 100 CM ALTO
+        // ============================================================================
+        function buildFloorAndStructure90x45x100() {
+            const structGroup = new THREE.Group();
+
+            const bar = 0.24;
+
+            // Base inferior perimetral de 90 cm x 45 cm apoyada firmemente sobre el piso (Y = 0.0)
+            const frontBase = new THREE.Mesh(new THREE.BoxGeometry(9.0, bar, bar), materials.frame);
+            frontBase.position.set(0, bar / 2, 2.25 - bar / 2);
+            frontBase.castShadow = true;
+            frontBase.receiveShadow = true;
+            structGroup.add(frontBase);
+
+            const backBase = new THREE.Mesh(new THREE.BoxGeometry(9.0, bar, bar), materials.frame);
+            backBase.position.set(0, bar / 2, -2.25 + bar / 2);
+            backBase.castShadow = true;
+            backBase.receiveShadow = true;
+            structGroup.add(backBase);
+
+            const leftBase = new THREE.Mesh(new THREE.BoxGeometry(bar, bar, 4.5 - bar * 2), materials.frame);
+            leftBase.position.set(-4.5 + bar / 2, bar / 2, 0);
+            leftBase.castShadow = true;
+            leftBase.receiveShadow = true;
+            structGroup.add(leftBase);
+
+            const rightBase = new THREE.Mesh(new THREE.BoxGeometry(bar, bar, 4.5 - bar * 2), materials.frame);
+            rightBase.position.set(4.5 - bar / 2, bar / 2, 0);
+            rightBase.castShadow = true;
+            rightBase.receiveShadow = true;
+            structGroup.add(rightBase);
+
+            // Tablero base de apoyo para el depósito de 20 L
+            const baseBoard = new THREE.Mesh(new THREE.BoxGeometry(8.5, 0.12, 4.0), materials.woodBase);
+            baseBoard.position.set(0, 0.18, 0);
+            baseBoard.castShadow = true;
+            baseBoard.receiveShadow = true;
+            structGroup.add(baseBoard);
+
+            // 4 Columnas verticales hasta los 100 cm de alto (Y = 0 a 10.0)
+            const postHeight = 10.0;
+            const postGeo = new THREE.BoxGeometry(bar, postHeight, bar);
+            const cornerCoords = [
+                [-4.5 + bar / 2, postHeight / 2, -2.25 + bar / 2],
+                [4.5 - bar / 2, postHeight / 2, -2.25 + bar / 2],
+                [-4.5 + bar / 2, postHeight / 2, 2.25 - bar / 2],
+                [4.5 - bar / 2, postHeight / 2, 2.25 - bar / 2]
+            ];
+            cornerCoords.forEach(([x, y, z]) => {
+                const post = new THREE.Mesh(postGeo, materials.frame);
+                post.position.set(x, y, z);
+                post.castShadow = true;
+                post.receiveShadow = true;
+                structGroup.add(post);
+            });
+
+            // Marco superior a 100 cm de altura
+            const topY = 10.0 - bar / 2;
+            const topFront = new THREE.Mesh(new THREE.BoxGeometry(9.0, bar, bar), materials.frame);
+            topFront.position.set(0, topY, 2.25 - bar / 2);
+            topFront.castShadow = true;
+            structGroup.add(topFront);
+
+            const topBack = new THREE.Mesh(new THREE.BoxGeometry(9.0, bar, bar), materials.frame);
+            topBack.position.set(0, topY, -2.25 + bar / 2);
+            topBack.castShadow = true;
+            structGroup.add(topBack);
+
+            const topLeft = new THREE.Mesh(new THREE.BoxGeometry(bar, bar, 4.5 - bar * 2), materials.frame);
+            topLeft.position.set(-4.5 + bar / 2, topY, 0);
+            topLeft.castShadow = true;
+            structGroup.add(topLeft);
+
+            const topRight = new THREE.Mesh(new THREE.BoxGeometry(bar, bar, 4.5 - bar * 2), materials.frame);
+            topRight.position.set(4.5 - bar / 2, topY, 0);
+            topRight.castShadow = true;
+            structGroup.add(topRight);
+
+            // Dos parantes intermedios de soporte de canales en X = -3.1 y X = +3.1
+            const supportXs = [-3.1, 3.1];
+            supportXs.forEach((sx) => {
+                const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 9.6, 0.18), materials.frame);
+                post.position.set(sx, 5.0, -0.72);
+                post.castShadow = true;
+                structGroup.add(post);
+
+                const t = (sx - (-4.0)) / 8.0;
+                const ySup = THREE.MathUtils.lerp(8.8, 8.5, t);
+                const yInf = THREE.MathUtils.lerp(5.2, 5.5, t);
+
+                [ySup, yInf].forEach((cy) => {
+                    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.14, 0.78), materials.frame);
+                    arm.position.set(sx, cy - 0.58, -0.35);
+                    arm.castShadow = true;
+                    structGroup.add(arm);
+
+                    const cradleGeo = new THREE.CylinderGeometry(0.57, 0.57, 0.18, 24, 1, true, Math.PI * 0.15, Math.PI * 0.7);
+                    const cradle = new THREE.Mesh(cradleGeo, materials.frame);
+                    cradle.rotation.z = Math.PI / 2;
+                    cradle.position.set(sx, cy, 0);
+                    structGroup.add(cradle);
+                });
+            });
+
+            scene.add(structGroup);
+        }
+
+        // ============================================================================
+        // 2. DEPÓSITO OPACO CON TAPA (20 LITROS NOMINALES) + SENSOR DE NIVEL Y LUZ DE AVISO
+        // ============================================================================
+        function buildOpaqueReservoir20LAndSensor() {
+            const tankW = 4.2;
+            const tankH = 2.4;
+            const tankD = 2.6;
+            const tankCenterX = -1.05;
+            const tankCenterY = 0.24 + tankH / 2; // 1.44
+            const tankCenterZ = 0;
+
+            const reservoirGroup = new THREE.Group();
+            reservoirGroup.position.set(tankCenterX, tankCenterY, tankCenterZ);
+
+            // Cuerpo del depósito
+            const wallGeo = new THREE.BoxGeometry(tankW, tankH, tankD);
+            const wallMesh = new THREE.Mesh(wallGeo, materials.reservoirWall);
+            wallMesh.renderOrder = 1;
+            registerSelectable(wallMesh, 'deposito');
+            reservoirGroup.add(wallMesh);
+
+            // Contorno técnico del depósito para facilitar su identificación visual
+            const tankEdges = new THREE.EdgesGeometry(wallGeo);
+            const tankEdgeLines = new THREE.LineSegments(
+                tankEdges,
+                new THREE.LineBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.55 })
+            );
+            reservoirGroup.add(tankEdgeLines);
+
+            // Tapa superior opaca desmontable
+            const lidGeo = new THREE.BoxGeometry(tankW + 0.14, 0.14, tankD + 0.14);
+            const lidMesh = new THREE.Mesh(lidGeo, materials.reservoirLid);
+            lidMesh.position.set(0, tankH / 2 + 0.06, 0);
+            lidMesh.renderOrder = 1;
+            registerSelectable(lidMesh, 'deposito');
+            reservoirGroup.add(lidMesh);
+
+            // Pasamuros en la tapa para manguera de impulsión y caño de retorno
+            const portGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.22, 16);
+            const returnPort = new THREE.Mesh(portGeo, materials.pvcFitting);
+            returnPort.position.set(-1.65, tankH / 2 + 0.08, 0);
+            registerSelectable(returnPort, 'deposito');
+            reservoirGroup.add(returnPort);
+
+            const hosePort = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.22, 16), materials.pvcFitting);
+            hosePort.position.set(-1.15, tankH / 2 + 0.08, -0.35);
+            registerSelectable(hosePort, 'deposito');
+            reservoirGroup.add(hosePort);
+
+            // Volumen de solución nutritiva dentro del depósito
+            const waterGeo = new THREE.BoxGeometry(tankW - 0.14, 1.0, tankD - 0.14);
+            waterGeo.translate(0, 0.5, 0);
+            reservoirWaterMesh = new THREE.Mesh(waterGeo, materials.reservoirWaterVol);
+            reservoirWaterMesh.position.set(0, -tankH / 2 + 0.08, 0);
+            reservoirWaterMesh.renderOrder = 3;
+            registerSelectable(reservoirWaterMesh, 'deposito');
+            reservoirGroup.add(reservoirWaterMesh);
+
+            const surfaceGeo = new THREE.PlaneGeometry(tankW - 0.14, tankD - 0.14);
+            surfaceGeo.rotateX(-Math.PI / 2);
+            reservoirWaterSurfaceMesh = new THREE.Mesh(surfaceGeo, materials.waterSurface);
+            reservoirWaterSurfaceMesh.renderOrder = 4;
+            reservoirGroup.add(reservoirWaterSurfaceMesh);
+
+            // ------------------------------------------------------------------------
+            // SENSOR DE NIVEL DENTRO DEL DEPÓSITO Y LUZ DE AVISO EXTERIOR
+            // ------------------------------------------------------------------------
+            const sensorLocalX = 1.05;
+            const sensorLocalZ = 0.42;
+            const maxWaterHeight = 2.12;
+            const minLevelLocalY = -tankH / 2 + 0.08 + simState.minWaterLevel * maxWaterHeight;
+
+            const sensorHeadGeo = new THREE.CylinderGeometry(0.24, 0.26, 0.26, 20);
+            const sensorHeadMesh = new THREE.Mesh(sensorHeadGeo, materials.timerAccent);
+            sensorHeadMesh.position.set(sensorLocalX, tankH / 2 + 0.22, sensorLocalZ);
+            registerSelectable(sensorHeadMesh, 'sensor');
+            reservoirGroup.add(sensorHeadMesh);
+
+            const probeGeo = new THREE.CylinderGeometry(0.05, 0.05, tankH - 0.15, 16);
+            const probeMesh = new THREE.Mesh(probeGeo, materials.sensorStem);
+            probeMesh.position.set(sensorLocalX, 0.05, sensorLocalZ);
+            probeMesh.renderOrder = 2;
+            registerSelectable(probeMesh, 'sensor');
+            reservoirGroup.add(probeMesh);
+
+            const minContactRing = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.26, 0.26, 0.07, 24),
+                materials.minLevelMark
+            );
+            minContactRing.position.set(sensorLocalX, minLevelLocalY, sensorLocalZ);
+            minContactRing.renderOrder = 2;
+            registerSelectable(minContactRing, 'sensor');
+            reservoirGroup.add(minContactRing);
+
+            const minStripe = new THREE.Mesh(
+                new THREE.BoxGeometry(tankW + 0.04, 0.05, tankD + 0.04),
+                materials.minLevelMark
+            );
+            minStripe.position.set(0, minLevelLocalY, 0);
+            registerSelectable(minStripe, 'sensor');
+            reservoirGroup.add(minStripe);
+
+            sensorFloatCollarGroup = new THREE.Group();
+            sensorFloatCollarGroup.position.set(sensorLocalX, 0, sensorLocalZ);
+
+            const collarMesh = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.22, 0.22, 0.24, 24),
+                materials.sensorFloat
+            );
+            collarMesh.renderOrder = 2;
+            registerSelectable(collarMesh, 'sensor');
+            sensorFloatCollarGroup.add(collarMesh);
+
+            const collarStripe = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.226, 0.226, 0.05, 24),
+                materials.sensorStem
+            );
+            collarStripe.renderOrder = 2;
+            registerSelectable(collarStripe, 'sensor');
+            sensorFloatCollarGroup.add(collarStripe);
+
+            reservoirGroup.add(sensorFloatCollarGroup);
+
+            // LUZ DE AVISO
+            const beaconBase = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.18, 0.20, 0.14, 20),
+                materials.timerAccent
+            );
+            beaconBase.position.set(sensorLocalX, tankH / 2 + 0.40, sensorLocalZ);
+            registerSelectable(beaconBase, 'sensor');
+            reservoirGroup.add(beaconBase);
+
+            const domeGeo = new THREE.SphereGeometry(0.17, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.65);
+            warningLightBulbMesh = new THREE.Mesh(domeGeo, materials.warningBeaconOff);
+            warningLightBulbMesh.position.set(sensorLocalX, tankH / 2 + 0.46, sensorLocalZ);
+            registerSelectable(warningLightBulbMesh, 'sensor');
+            reservoirGroup.add(warningLightBulbMesh);
+
+            const haloGeo = new THREE.SphereGeometry(0.34, 16, 16);
+            const haloMat = new THREE.MeshBasicMaterial({
+                color: 0xef4444,
+                transparent: true,
+                opacity: 0.0
+            });
+            warningLightHaloMesh = new THREE.Mesh(haloGeo, haloMat);
+            warningLightHaloMesh.position.set(sensorLocalX, tankH / 2 + 0.52, sensorLocalZ);
+            reservoirGroup.add(warningLightHaloMesh);
+
+            warningPointLight = new THREE.PointLight(0xff3333, 0, 4.5);
+            warningPointLight.position.set(sensorLocalX, tankH / 2 + 0.65, sensorLocalZ);
+            reservoirGroup.add(warningPointLight);
+
+            scene.add(reservoirGroup);
+        }
+
+        // ============================================================================
+        // 3. BOMBA SUMERGIBLE EN LA PARTE INFERIOR DEL DEPÓSITO DE 20 LITROS
+        // ============================================================================
+        function buildSubmergedPump() {
+            // Ubicada sumergida en el fondo del depósito: X = -2.20, Y = 0.56, Z = -0.35
+            const pumpGroup = new THREE.Group();
+            pumpGroup.position.set(-2.20, 0.56, -0.35);
+
+            // Carcasa principal de la bomba sumergible
+            const bodyGeo = new THREE.BoxGeometry(0.76, 0.52, 0.56);
+            const bodyMesh = new THREE.Mesh(bodyGeo, materials.pumpBody);
+            bodyMesh.renderOrder = 2;
+            registerSelectable(bodyMesh, 'bomba');
+            pumpGroup.add(bodyMesh);
+
+            // Contorno claro para distinguir la bomba sumergida en la vista interior
+            const bodyEdges = new THREE.LineSegments(
+                new THREE.EdgesGeometry(bodyGeo),
+                new THREE.LineBasicMaterial({ color: 0x38bdf8 })
+            );
+            bodyEdges.renderOrder = 2;
+            pumpGroup.add(bodyEdges);
+
+            // Rejilla frontal de succión de agua (color cian de alto contraste)
+            const filterMesh = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.44, 0.48), materials.pumpAccent);
+            filterMesh.position.set(0.46, -0.02, 0);
+            filterMesh.renderOrder = 2;
+            registerSelectable(filterMesh, 'bomba');
+            pumpGroup.add(filterMesh);
+
+            // Ranuras de entrada de agua en la rejilla
+            for (let i = -1; i <= 1; i++) {
+                const slot = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.28, 0.05, 0.36),
+                    materials.pumpBody
+                );
+                slot.position.set(0.47, -0.02 + i * 0.11, 0);
+                slot.renderOrder = 2;
+                pumpGroup.add(slot);
+            }
+
+            // Placa técnica identificatoria en el frente de la bomba
+            const badgeMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(0.42, 0.22, 0.58),
+                materials.pumpBadge
+            );
+            badgeMesh.position.set(-0.06, 0.02, 0);
+            badgeMesh.renderOrder = 2;
+            registerSelectable(badgeMesh, 'bomba');
+            pumpGroup.add(badgeMesh);
+
+            // Boquilla superior de salida hacia la manguera de impulsión
+            const outletNozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.32, 16), materials.pumpAccent);
+            outletNozzle.position.set(0, 0.36, 0);
+            outletNozzle.renderOrder = 2;
+            registerSelectable(outletNozzle, 'bomba');
+            pumpGroup.add(outletNozzle);
+
+            // Anillos dinámicos de movimiento de agua cuando la bomba está encendida
+            const ringGeo = new THREE.TorusGeometry(0.32, 0.035, 12, 24);
+            ringGeo.rotateX(Math.PI / 2);
+            pumpVibrationRing = new THREE.Mesh(
+                ringGeo,
+                new THREE.MeshBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0 })
+            );
+            pumpVibrationRing.position.set(0.12, 0.22, 0);
+            pumpVibrationRing.renderOrder = 5;
+            pumpGroup.add(pumpVibrationRing);
+
+            const ring2Geo = new THREE.TorusGeometry(0.48, 0.025, 10, 24);
+            ring2Geo.rotateX(Math.PI / 2);
+            pumpSecondRing = new THREE.Mesh(
+                ring2Geo,
+                new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0 })
+            );
+            pumpSecondRing.position.set(0.12, 0.12, 0);
+            pumpSecondRing.renderOrder = 5;
+            pumpGroup.add(pumpSecondRing);
+
+            // Burbujas / movimiento interno de succión dentro del depósito al encender la bomba
+            const bubbleGeo = new THREE.SphereGeometry(0.045, 8, 8);
+            const bubbleMat = new THREE.MeshBasicMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.85 });
+            for (let i = 0; i < 10; i++) {
+                const bMesh = new THREE.Mesh(bubbleGeo, bubbleMat);
+                bMesh.visible = false;
+                bMesh.renderOrder = 5;
+                pumpGroup.add(bMesh);
+                pumpBubbles.push({
+                    mesh: bMesh,
+                    phase: i / 10,
+                    angle: (i / 10) * Math.PI * 2
+                });
+            }
+
+            // Línea indicadora discreta desde la bomba sumergible hacia su etiqueta exterior
+            const leaderPoints = [
+                new THREE.Vector3(-2.20, 0.56, -0.10),
+                new THREE.Vector3(-3.35, 1.05, 0.85),
+                new THREE.Vector3(-4.55, 1.35, 1.45)
+            ];
+            const leaderGeo = new THREE.BufferGeometry().setFromPoints(leaderPoints);
+            pumpLeaderLine = new THREE.Line(
+                leaderGeo,
+                new THREE.LineBasicMaterial({ color: 0x06b6d4, transparent: true, opacity: 0.75 })
+            );
+            scene.add(pumpLeaderLine);
+
+            scene.add(pumpGroup);
+        }
+
+        // ============================================================================
+        // 4. DOS CANALES DE PVC (80 CM LARGO, Ø 110 MM) Y 4 PLANTAS DE LECHUGA CON CRECIMIENTO ANIMADO
+        // ============================================================================
+        function createOrganicLettuceLeafGeometry(bladeLength, bladeWidth, archHeight, cupDepth, ruffleAmp) {
+            const segU = 12;
+            const segV = 14;
+            const geo = new THREE.BufferGeometry();
+            const positions = [];
+            const colors = [];
+            const indices = [];
+
+            for (let iv = 0; iv <= segV; iv++) {
+                const v = iv / segV; // 0 = base del tallo/nervadura, 1 = borde superior de la hoja
+                // Perfil ancho tipo hoja de lechuga (angosto en la base, amplio y redondeado en el limbo)
+                const widthEnvelope = 0.14 + 0.86 * Math.sin(Math.pow(v, 0.68) * Math.PI * 0.86);
+
+                for (let iu = 0; iu <= segU; iu++) {
+                    const u = (iu / segU) * 2 - 1; // -1 a +1
+                    const absU = Math.abs(u);
+
+                    // Ondulación natural del contorno exterior de la hoja de lechuga
+                    const marginWave = 1.0 + ruffleAmp * 0.15 * Math.pow(v, 1.2) * Math.sin(u * Math.PI * 3.0);
+                    const halfW = (bladeWidth * 0.5) * widthEnvelope * marginWave;
+
+                    // Extensión radial desde el centro de la roseta
+                    const radialX = v * bladeLength * (1.0 - 0.08 * u * u) +
+                        ruffleAmp * 0.03 * Math.pow(v, 1.5) * Math.cos(u * Math.PI * 4.0);
+
+                    // Curvatura longitudinal (arqueado natural de la hoja) + acanalado transversal + rizado del borde
+                    const longitudinalArch = Math.sin(v * Math.PI * 0.72) * archHeight -
+                        Math.pow(Math.max(0, v - 0.62), 2.0) * (archHeight * 0.85);
+                    const lateralCup = Math.pow(absU, 1.65) * cupDepth * (1.0 - v * 0.35);
+                    const midribGroove = -0.022 * Math.exp(-u * u * 16.0) * (1.0 - v * 0.45);
+                    const edgeRuffle = ruffleAmp * Math.pow(Math.max(0, v - 0.22), 1.3) * Math.pow(absU, 1.15) *
+                        (Math.sin(u * 9.0 + v * 5.5) * 0.052 + Math.cos(u * 14.0 - v * 7.0) * 0.026);
+
+                    const py = longitudinalArch + lateralCup + midribGroove + edgeRuffle;
+                    const pz = u * halfW;
+
+                    positions.push(radialX, py, pz);
+
+                    // Color por vértice: nervadura central y base más claras y tiernas, limbo más intenso
+                    const veinFactor = Math.exp(-u * u * 14.0) * (1.0 - v * 0.35);
+                    const baseFactor = Math.max(0, 1.0 - v * 1.65);
+                    const lightness = Math.min(1.0, Math.max(veinFactor * 0.65, baseFactor * 0.75));
+
+                    const r = THREE.MathUtils.lerp(0.82, 1.15, lightness);
+                    const g = THREE.MathUtils.lerp(0.92, 1.18, lightness);
+                    const b = THREE.MathUtils.lerp(0.78, 1.05, lightness);
+                    colors.push(r, g, b);
+                }
+            }
+
+            const stride = segU + 1;
+            for (let iv = 0; iv < segV; iv++) {
+                for (let iu = 0; iu < segU; iu++) {
+                    const a = iv * stride + iu;
+                    const b = a + 1;
+                    const c = (iv + 1) * stride + iu;
+                    const d = c + 1;
+                    indices.push(a, c, b);
+                    indices.push(b, c, d);
+                }
+            }
+
+            geo.setIndex(indices);
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geo.computeVertexNormals();
+            return geo;
+        }
+
+        function initLettuceGeometries() {
+            if (lettuceLeafGeos.heart) return;
+            // 4 geometrías orgánicas de hoja según corona (desde hojas tiernas centrales hasta hojas exteriores amplias y rizadas)
+            lettuceLeafGeos.heart = createOrganicLettuceLeafGeometry(0.32, 0.28, 0.24, 0.09, 0.35);
+            lettuceLeafGeos.inner = createOrganicLettuceLeafGeometry(0.46, 0.40, 0.28, 0.11, 0.55);
+            lettuceLeafGeos.mid   = createOrganicLettuceLeafGeometry(0.62, 0.54, 0.26, 0.10, 0.80);
+            lettuceLeafGeos.outer = createOrganicLettuceLeafGeometry(0.76, 0.66, 0.22, 0.08, 1.05);
+        }
+
+        function buildChannels80cmAndPlants30cm() {
+            initLettuceGeometries();
+
+            const upperLeft = new THREE.Vector3(-4.0, 8.8, 0);
+            const upperRight = new THREE.Vector3(4.0, 8.5, 0);
+            buildSingleChannel(upperLeft, upperRight, [-1.5, 1.5], 0);
+
+            const lowerLeft = new THREE.Vector3(-4.0, 5.2, 0);
+            const lowerRight = new THREE.Vector3(4.0, 5.5, 0);
+            buildSingleChannel(lowerLeft, lowerRight, [-1.5, 1.5], 2);
+        }
+
+        function buildSingleChannel(leftPt, rightPt, plantWorldXs, basePlantIdx) {
+            const center = new THREE.Vector3().addVectors(leftPt, rightPt).multiplyScalar(0.5);
+            const length = 8.0; // 80 cm exactos
+            const radius = 0.55; // Ø 110 mm
+            const slopeAngle = Math.atan2(rightPt.y - leftPt.y, rightPt.x - leftPt.x);
+
+            const channelGroup = new THREE.Group();
+            channelGroup.position.copy(center);
+            channelGroup.rotation.z = slopeAngle;
+
+            // Tubo de PVC Ø 110 mm
+            const tubeGeo = new THREE.CylinderGeometry(radius, radius, length, 32, 1, true);
+            tubeGeo.rotateZ(Math.PI / 2);
+            const tubeMesh = new THREE.Mesh(tubeGeo, materials.channelWall);
+            tubeMesh.renderOrder = 2;
+            registerSelectable(tubeMesh, 'canales');
+            channelGroup.add(tubeMesh);
+
+            // Bordes longitudinales del tubo blanco de PVC para definir su silueta frente a la pared #DCE5ED
+            const rimMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.90 });
+            const rimGeo = new THREE.CylinderGeometry(0.016, 0.016, length, 8);
+            rimGeo.rotateZ(Math.PI / 2);
+
+            const topRim = new THREE.Mesh(rimGeo, rimMat);
+            topRim.position.set(0, radius, 0);
+            channelGroup.add(topRim);
+
+            const bottomRim = new THREE.Mesh(rimGeo, rimMat);
+            bottomRim.position.set(0, -radius, 0);
+            channelGroup.add(bottomRim);
+
+            // Tapas de PVC en ambos extremos (X = -4.0 y X = +4.0)
+            const capGeo = new THREE.CylinderGeometry(radius + 0.035, radius + 0.035, 0.14, 32);
+            capGeo.rotateZ(Math.PI / 2);
+
+            const leftCap = new THREE.Mesh(capGeo, materials.pvcFitting);
+            leftCap.position.set(-length / 2, 0, 0);
+            leftCap.castShadow = true;
+            registerSelectable(leftCap, 'canales');
+            channelGroup.add(leftCap);
+
+            const rightCap = new THREE.Mesh(capGeo, materials.pvcFitting);
+            rightCap.position.set(length / 2, 0, 0);
+            rightCap.castShadow = true;
+            registerSelectable(rightCap, 'canales');
+            channelGroup.add(rightCap);
+
+            scene.add(channelGroup);
+
+            // Plantines de lechuga separados 30 cm entre sus centros (X = -1.5 y X = +1.5)
+            plantWorldXs.forEach((wx, idx) => {
+                const t = (wx - leftPt.x) / (rightPt.x - leftPt.x);
+                const wy = THREE.MathUtils.lerp(leftPt.y, rightPt.y, t);
+                const plant = createLettuceSeedling(basePlantIdx + idx);
+                plant.position.set(wx, wy, 0);
+                scene.add(plant);
+            });
+        }
+
+        function createLettuceSeedling(plantIdx = 0) {
+            const group = new THREE.Group();
+            const seedAngleOffset = plantIdx * 1.15;
+
+            // Vaso canastilla encastrado en el lomo superior del canal (sin modificar su tamaño original)
+            const potGeo = new THREE.CylinderGeometry(0.26, 0.18, 0.38, 18);
+            const potMesh = new THREE.Mesh(potGeo, materials.netPot);
+            potMesh.position.set(0, 0.38, 0);
+            registerSelectable(potMesh, 'canales');
+            group.add(potMesh);
+
+            const lipGeo = new THREE.TorusGeometry(0.26, 0.03, 10, 20);
+            lipGeo.rotateX(Math.PI / 2);
+            const lipMesh = new THREE.Mesh(lipGeo, materials.netPot);
+            lipMesh.position.set(0, 0.56, 0);
+            registerSelectable(lipMesh, 'canales');
+            group.add(lipMesh);
+
+            // ------------------------------------------------------------------------
+            // SISTEMA RADICULAR PROGRESIVO DENTRO DEL CANAL DE PVC (Ø 110 mm, radio 0.55)
+            // Las raíces cuelgan desde la base del vaso (y = 0.21) sin atravesar el fondo del tubo (y = -0.52)
+            // ------------------------------------------------------------------------
+            const rootConfigs = [
+                { rx: 0.00, rz: 0.00, maxLen: 0.66, rTop: 0.025, rBot: 0.009, tiltZ:  0.02, tiltX:  0.01, appearAt: 0.00, minFrac: 0.26 },
+                { rx: -0.06, rz: 0.04, maxLen: 0.64, rTop: 0.022, rBot: 0.008, tiltZ: -0.07, tiltX:  0.04, appearAt: 0.00, minFrac: 0.25 },
+                { rx:  0.06, rz:-0.03, maxLen: 0.65, rTop: 0.022, rBot: 0.008, tiltZ:  0.08, tiltX: -0.03, appearAt: 0.00, minFrac: 0.25 },
+                { rx: -0.04, rz:-0.06, maxLen: 0.61, rTop: 0.020, rBot: 0.008, tiltZ: -0.05, tiltX: -0.06, appearAt: 0.00, minFrac: 0.24 },
+                { rx:  0.05, rz: 0.06, maxLen: 0.62, rTop: 0.020, rBot: 0.008, tiltZ:  0.06, tiltX:  0.05, appearAt: 0.00, minFrac: 0.24 },
+                { rx: -0.09, rz:-0.01, maxLen: 0.58, rTop: 0.019, rBot: 0.007, tiltZ: -0.11, tiltX:  0.02, appearAt: 0.00, minFrac: 0.22 },
+                { rx:  0.09, rz: 0.02, maxLen: 0.59, rTop: 0.019, rBot: 0.007, tiltZ:  0.11, tiltX: -0.02, appearAt: 0.00, minFrac: 0.22 },
+                // Raíces secundarias que se desarrollan progresivamente durante el crecimiento
+                { rx: -0.11, rz: 0.05, maxLen: 0.56, rTop: 0.017, rBot: 0.006, tiltZ: -0.14, tiltX:  0.06, appearAt: 0.12, minFrac: 0.05 },
+                { rx:  0.11, rz:-0.05, maxLen: 0.57, rTop: 0.017, rBot: 0.006, tiltZ:  0.14, tiltX: -0.05, appearAt: 0.16, minFrac: 0.05 },
+                { rx: -0.03, rz: 0.09, maxLen: 0.58, rTop: 0.017, rBot: 0.006, tiltZ: -0.04, tiltX:  0.10, appearAt: 0.22, minFrac: 0.05 },
+                { rx:  0.03, rz:-0.09, maxLen: 0.58, rTop: 0.017, rBot: 0.006, tiltZ:  0.04, tiltX: -0.10, appearAt: 0.28, minFrac: 0.05 },
+                { rx: -0.13, rz:-0.04, maxLen: 0.53, rTop: 0.015, rBot: 0.005, tiltZ: -0.16, tiltX: -0.04, appearAt: 0.35, minFrac: 0.04 },
+                { rx:  0.13, rz: 0.04, maxLen: 0.54, rTop: 0.015, rBot: 0.005, tiltZ:  0.16, tiltX:  0.04, appearAt: 0.42, minFrac: 0.04 },
+                { rx: -0.07, rz: 0.08, maxLen: 0.52, rTop: 0.014, rBot: 0.005, tiltZ: -0.09, tiltX:  0.08, appearAt: 0.50, minFrac: 0.04 },
+                { rx:  0.07, rz:-0.08, maxLen: 0.52, rTop: 0.014, rBot: 0.005, tiltZ:  0.09, tiltX: -0.08, appearAt: 0.56, minFrac: 0.04 }
+            ];
+
+            const plantRoots = [];
+            rootConfigs.forEach((rc) => {
+                // Geometría trasladada para que su origen (y=0) esté en la base del vaso canastilla y crezca hacia abajo (-Y)
+                const rGeo = new THREE.CylinderGeometry(rc.rTop, rc.rBot, rc.maxLen, 8);
+                rGeo.translate(0, -rc.maxLen * 0.5, 0);
+                const strand = new THREE.Mesh(rGeo, materials.roots);
+                strand.position.set(rc.rx, 0.21, rc.rz);
+                strand.rotation.z = rc.tiltZ;
+                strand.rotation.x = rc.tiltX;
+                strand.renderOrder = 2;
+                group.add(strand);
+
+                plantRoots.push({
+                    mesh: strand,
+                    appearAt: rc.appearAt,
+                    minFrac: rc.minFrac
+                });
+            });
+
+            // ------------------------------------------------------------------------
+            // ROSETA ORGÁNICA DE HOJAS DE LECHUGA EN 4 CORONAS CONCÉNTRICAS
+            // ------------------------------------------------------------------------
+            const foliageGroup = new THREE.Group();
+            foliageGroup.position.set(0, 0.55, 0);
+
+            const plantLeaves = [];
+
+            // Cogollo central tierno
+            const heartBud = new THREE.Mesh(
+                new THREE.SphereGeometry(0.11, 12, 10),
+                materials.lettuceHeart
+            );
+            heartBud.position.set(0, 0.08, 0);
+            heartBud.scale.set(1.0, 1.15, 1.0);
+            registerSelectable(heartBud, 'canales');
+            foliageGroup.add(heartBud);
+
+            // Definición de las 4 coronas de hojas (del centro hacia afuera)
+            const whorls = [
+                // Corona 0: Hojas centrales tiernas (presentes desde el plantín inicial)
+                {
+                    count: 5,
+                    geo: lettuceLeafGeos.heart,
+                    mat: materials.lettuceHeart,
+                    radiusOffset: 0.03,
+                    yOffset: 0.04,
+                    initialPitch: 0.78,
+                    finalPitch: 0.58,
+                    minScale: 0.52,
+                    maxScaleX: 0.95,
+                    maxScaleY: 0.92,
+                    maxScaleZ: 0.98,
+                    appearStart: 0.0,
+                    appearSpread: 0.0,
+                    fullDuration: 0.45,
+                    angleStep: (Math.PI * 2) / 5,
+                    phaseOffset: 0.0
+                },
+                // Corona 1: Hojas internas jóvenes (comienzan pequeñas en el plantín y se expanden)
+                {
+                    count: 6,
+                    geo: lettuceLeafGeos.inner,
+                    mat: materials.lettuceInner,
+                    radiusOffset: 0.06,
+                    yOffset: 0.03,
+                    initialPitch: 0.68,
+                    finalPitch: 0.42,
+                    minScale: 0.38,
+                    maxScaleX: 1.02,
+                    maxScaleY: 0.95,
+                    maxScaleZ: 1.06,
+                    appearStart: 0.0,
+                    appearSpread: 0.14,
+                    fullDuration: 0.52,
+                    angleStep: (Math.PI * 2) / 6,
+                    phaseOffset: 0.52
+                },
+                // Corona 2: Hojas intermedias frondosas (brotan progresivamente durante la etapa de Crecimiento)
+                {
+                    count: 8,
+                    geo: lettuceLeafGeos.mid,
+                    mat: materials.lettuceMid,
+                    radiusOffset: 0.09,
+                    yOffset: 0.02,
+                    initialPitch: 0.58,
+                    finalPitch: 0.25,
+                    minScale: 0.02,
+                    maxScaleX: 1.08,
+                    maxScaleY: 0.96,
+                    maxScaleZ: 1.12,
+                    appearStart: 0.18,
+                    appearSpread: 0.28,
+                    fullDuration: 0.46,
+                    angleStep: (Math.PI * 2) / 8,
+                    phaseOffset: 0.28
+                },
+                // Corona 3: Hojas exteriores amplias y rizadas (dan el volumen final de Lechuga desarrollada)
+                {
+                    count: 9,
+                    geo: lettuceLeafGeos.outer,
+                    mat: materials.lettuceOuter,
+                    radiusOffset: 0.11,
+                    yOffset: 0.00,
+                    initialPitch: 0.46,
+                    finalPitch: 0.08,
+                    minScale: 0.02,
+                    maxScaleX: 1.12,
+                    maxScaleY: 0.94,
+                    maxScaleZ: 1.16,
+                    appearStart: 0.44,
+                    appearSpread: 0.26,
+                    fullDuration: 0.30,
+                    angleStep: (Math.PI * 2) / 9,
+                    phaseOffset: 0.65
+                }
+            ];
+
+            whorls.forEach((w, wIdx) => {
+                for (let i = 0; i < w.count; i++) {
+                    // Variación natural de orientación y tamaño entre hojas para aspecto orgánico
+                    const jitterAngle = Math.sin(plantIdx * 3.1 + wIdx * 5.7 + i * 2.3) * 0.14;
+                    const jitterScale = 1.0 + Math.cos(plantIdx * 2.7 + wIdx * 4.1 + i * 1.9) * 0.08;
+                    const jitterPitch = Math.sin(plantIdx * 1.9 + wIdx * 3.3 + i * 4.1) * 0.06;
+
+                    const azimuth = seedAngleOffset + w.phaseOffset + i * w.angleStep + jitterAngle;
+                    const pivot = new THREE.Group();
+                    pivot.rotation.y = azimuth;
+
+                    const leafMesh = new THREE.Mesh(w.geo, w.mat);
+                    leafMesh.position.set(w.radiusOffset, w.yOffset, 0);
+                    leafMesh.castShadow = true;
+                    leafMesh.receiveShadow = true;
+                    registerSelectable(leafMesh, 'canales');
+                    pivot.add(leafMesh);
+                    foliageGroup.add(pivot);
+
+                    const appearAt = w.appearStart + (i / w.count) * w.appearSpread;
+                    const fullAt = Math.min(1.0, appearAt + w.fullDuration);
+
+                    plantLeaves.push({
+                        mesh: leafMesh,
+                        appearAt,
+                        fullAt,
+                        minScale: w.minScale,
+                        maxScaleX: w.maxScaleX * jitterScale,
+                        maxScaleY: w.maxScaleY * jitterScale,
+                        maxScaleZ: w.maxScaleZ * jitterScale,
+                        initialPitch: w.initialPitch + jitterPitch,
+                        finalPitch: w.finalPitch + jitterPitch
+                    });
+                }
+            });
+
+            group.add(foliageGroup);
+
+            lettucePlants.push({
+                group,
+                foliageGroup,
+                heartBud,
+                leaves: plantLeaves,
+                roots: plantRoots
+            });
+
+            return group;
+        }
+
+        // Actualiza de forma suave y continua el tamaño, aparición de hojas y elongación de raíces según el progreso [0, 1]
+        function updateLettuceGrowthVisuals(progress) {
+            const p = THREE.MathUtils.clamp(progress, 0.0, 1.0);
+
+            lettucePlants.forEach((plant) => {
+                // Escala del cogollo central
+                if (plant.heartBud) {
+                    const budScale = THREE.MathUtils.lerp(0.62, 1.28, p);
+                    plant.heartBud.scale.set(budScale, budScale * 1.1, budScale);
+                }
+
+                // Hojas por coronas
+                plant.leaves.forEach((lf) => {
+                    if (p < lf.appearAt && lf.minScale <= 0.05) {
+                        lf.mesh.visible = false;
+                        return;
+                    }
+                    lf.mesh.visible = true;
+
+                    let localT = 0;
+                    if (p > lf.appearAt) {
+                        const span = Math.max(0.001, lf.fullAt - lf.appearAt);
+                        const rawT = THREE.MathUtils.clamp((p - lf.appearAt) / span, 0.0, 1.0);
+                        // Suavizado smoothstep para crecimiento orgánico sin saltos bruscos
+                        localT = rawT * rawT * (3.0 - 2.0 * rawT);
+                    }
+
+                    const sx = THREE.MathUtils.lerp(lf.minScale * lf.maxScaleX, lf.maxScaleX, localT);
+                    const sy = THREE.MathUtils.lerp(lf.minScale * lf.maxScaleY, lf.maxScaleY, localT);
+                    const sz = THREE.MathUtils.lerp(lf.minScale * lf.maxScaleZ, lf.maxScaleZ, localT);
+                    lf.mesh.scale.set(sx, sy, sz);
+
+                    // A medida que la hoja crece y aparecen hojas nuevas en el centro, se abre suavemente hacia afuera
+                    lf.mesh.rotation.z = THREE.MathUtils.lerp(lf.initialPitch, lf.finalPitch, localT);
+                });
+
+                // Raíces dentro del canal de PVC (se alargan progresivamente sin atravesar las paredes del tubo)
+                plant.roots.forEach((rt) => {
+                    if (p < rt.appearAt && rt.minFrac < 0.1) {
+                        rt.mesh.visible = false;
+                        return;
+                    }
+                    rt.mesh.visible = true;
+                    const span = Math.max(0.001, 1.0 - rt.appearAt);
+                    const rawT = THREE.MathUtils.clamp((p - rt.appearAt) / span, 0.0, 1.0);
+                    const smoothT = rawT * rawT * (3.0 - 2.0 * rawT);
+                    const lenFactor = THREE.MathUtils.lerp(rt.minFrac, 1.0, smoothT);
+                    const radialFactor = THREE.MathUtils.lerp(0.72, 1.0, smoothT);
+                    rt.mesh.scale.set(radialFactor, lenFactor, radialFactor);
+                });
+            });
+        }
+
+        function updateGrowthUI() {
+            const p = THREE.MathUtils.clamp(simState.growthProgress, 0.0, 1.0);
+            const pct = Math.round(p * 100);
+
+            // Determinar etapa actual (1. Plantín, 2. Crecimiento, 3. Lechuga desarrollada)
+            let stageIndex = 1;
+            let stageText = "1. Plantín";
+            if (p >= 0.80) {
+                stageIndex = 3;
+                stageText = "3. Lechuga desarrollada";
+            } else if (p >= 0.34) {
+                stageIndex = 2;
+                stageText = "2. Crecimiento";
+            }
+
+            const badge = document.getElementById('growth-stage-badge');
+            if (badge) {
+                badge.textContent = stageText;
+            }
+
+            const timeLbl = document.getElementById('growth-time-label');
+            if (timeLbl) {
+                timeLbl.textContent = `${pct}%`;
+            }
+
+            const progBar = document.getElementById('growth-progress-bar');
+            if (progBar) {
+                progBar.style.width = `${pct}%`;
+            }
+
+            // Actualizar las 3 pastillas del indicador de etapas
+            const pill1 = document.getElementById('stage-pill-1');
+            const pill2 = document.getElementById('stage-pill-2');
+            const pill3 = document.getElementById('stage-pill-3');
+            const activeClass = "py-0.5 px-1 rounded bg-emerald-600 text-white shadow-sm transition font-extrabold";
+            const doneClass = "py-0.5 px-1 rounded bg-emerald-200 text-emerald-950 border border-emerald-400 transition font-bold";
+            const idleClass = "py-0.5 px-1 rounded bg-white/80 text-slate-500 border border-slate-200 transition";
+
+            if (pill1 && pill2 && pill3) {
+                pill1.className = stageIndex === 1 ? activeClass : doneClass;
+                pill2.className = stageIndex === 2 ? activeClass : (stageIndex > 2 ? doneClass : idleClass);
+                pill3.className = stageIndex === 3 ? activeClass : idleClass;
+            }
+
+            // Botones de control de crecimiento
+            const btnStart = document.getElementById('btn-growth-start');
+            const btnPause = document.getElementById('btn-growth-pause');
+            const dot = document.getElementById('growth-banner-dot');
+
+            if (btnPause) {
+                if (simState.growthPlaying) {
+                    btnPause.disabled = false;
+                    btnPause.textContent = "Pausar";
+                    btnPause.className = "py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[9.5px] text-amber-950 bg-amber-300 hover:bg-amber-400 border border-amber-500 active:scale-[0.99] transition leading-tight";
+                } else if (simState.growthPaused && p > 0 && p < 1) {
+                    btnPause.disabled = false;
+                    btnPause.textContent = "Reanudar";
+                    btnPause.className = "py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[9.5px] text-white bg-sky-600 hover:bg-sky-700 border border-sky-700 active:scale-[0.99] transition leading-tight shadow-sm";
+                } else {
+                    btnPause.disabled = true;
+                    btnPause.textContent = "Pausar";
+                    btnPause.className = "py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[9.5px] text-amber-950 bg-amber-200 border border-amber-400 transition leading-tight opacity-50";
+                }
+            }
+
+            if (btnStart) {
+                if (simState.growthPlaying) {
+                    btnStart.textContent = "Creciendo...";
+                    btnStart.className = "py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[9.5px] text-white bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] transition shadow-sm leading-tight";
+                } else {
+                    btnStart.textContent = "Simular crecimiento";
+                    btnStart.className = "py-1 px-1 rounded-lg font-bold text-[9px] sm:text-[9.5px] text-white bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] transition shadow-sm leading-tight";
+                }
+            }
+
+            if (dot) {
+                dot.className = simState.growthPlaying
+                    ? "w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0"
+                    : "w-2 h-2 rounded-full bg-emerald-600 shrink-0";
+            }
+        }
+
+        // ============================================================================
+        // 5. CONDUCTOS CONECTADOS: IMPULSIÓN, CONEXIÓN ENTRE NIVELES Y RETORNO AL DEPÓSITO
+        // ============================================================================
+        function buildConnectedPlumbingAndStreams() {
+            // 1. MANGUERA DE IMPULSIÓN:
+            hoseCurveGlobal = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(-2.20, 0.80, -0.35),
+                new THREE.Vector3(-2.20, 2.85, -0.35),
+                new THREE.Vector3(-3.65, 3.60, -0.35),
+                new THREE.Vector3(-4.20, 5.50, -0.20),
+                new THREE.Vector3(-4.20, 9.10, -0.05),
+                new THREE.Vector3(-3.95, 9.52, 0.0),
+                new THREE.Vector3(-3.68, 9.25, 0.0)
+            ]);
+
+            const hoseWallMesh = new THREE.Mesh(
+                new THREE.TubeGeometry(hoseCurveGlobal, 48, 0.088, 14, false),
+                materials.pipeWall
+            );
+            hoseWallMesh.renderOrder = 2;
+            registerSelectable(hoseWallMesh, 'bomba');
+            scene.add(hoseWallMesh);
+
+            const topInletFitting = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.14, 0.14, 0.24, 16),
+                materials.pvcFitting
+            );
+            topInletFitting.position.set(-3.68, 9.28, 0);
+            registerSelectable(topInletFitting, 'bomba');
+            scene.add(topInletFitting);
+
+            risingHoseWaterMesh = new THREE.Mesh(
+                new THREE.TubeGeometry(hoseCurveGlobal, 48, 0.062, 12, false),
+                materials.nutrientWater
+            );
+            risingHoseWaterMesh.visible = false;
+            risingHoseWaterMesh.renderOrder = 3;
+            scene.add(risingHoseWaterMesh);
+
+            // 2. CONEXIÓN ENTRE NIVELES (Extremo derecho X = +3.65):
+            const connX = 3.65;
+            const upperBottomFitting = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.18, 0.18, 0.26, 20),
+                materials.pvcFitting
+            );
+            upperBottomFitting.position.set(connX, 7.96, 0);
+            registerSelectable(upperBottomFitting, 'canales');
+            scene.add(upperBottomFitting);
+
+            const lowerTopFitting = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.18, 0.18, 0.26, 20),
+                materials.pvcFitting
+            );
+            lowerTopFitting.position.set(connX, 6.04, 0);
+            registerSelectable(lowerTopFitting, 'canales');
+            scene.add(lowerTopFitting);
+
+            midCurveGlobal = new THREE.LineCurve3(
+                new THREE.Vector3(connX, 8.05, 0),
+                new THREE.Vector3(connX, 5.95, 0)
+            );
+            const midWallMesh = new THREE.Mesh(
+                new THREE.TubeGeometry(midCurveGlobal, 12, 0.13, 16, false),
+                materials.pipeWall
+            );
+            midWallMesh.renderOrder = 2;
+            registerSelectable(midWallMesh, 'canales');
+            scene.add(midWallMesh);
+
+            midConnectorWaterMesh = new THREE.Mesh(
+                new THREE.TubeGeometry(midCurveGlobal, 12, 0.09, 14, false),
+                materials.nutrientWater
+            );
+            midConnectorWaterMesh.visible = false;
+            midConnectorWaterMesh.renderOrder = 3;
+            scene.add(midConnectorWaterMesh);
+
+            // 3. CONDUCTO DE RETORNO AL DEPÓSITO (Extremo izquierdo X = -3.65):
+            const retOutFitting = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.18, 0.18, 0.26, 20),
+                materials.pvcFitting
+            );
+            retOutFitting.position.set(-3.65, 4.66, 0);
+            registerSelectable(retOutFitting, 'canales');
+            scene.add(retOutFitting);
+
+            returnCurveGlobal = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(-3.65, 4.70, 0),
+                new THREE.Vector3(-3.65, 3.85, 0),
+                new THREE.Vector3(-2.70, 3.40, 0),
+                new THREE.Vector3(-2.70, 2.15, 0)
+            ]);
+
+            const returnWallMesh = new THREE.Mesh(
+                new THREE.TubeGeometry(returnCurveGlobal, 24, 0.13, 16, false),
+                materials.pipeWall
+            );
+            returnWallMesh.renderOrder = 2;
+            registerSelectable(returnWallMesh, 'canales');
+            scene.add(returnWallMesh);
+
+            returnPipeWaterMesh = new THREE.Mesh(
+                new THREE.TubeGeometry(returnCurveGlobal, 24, 0.09, 14, false),
+                materials.nutrientWater
+            );
+            returnPipeWaterMesh.visible = false;
+            returnPipeWaterMesh.renderOrder = 3;
+            scene.add(returnPipeWaterMesh);
+
+            // 4. LÁMINA POCO PROFUNDA DE SOLUCIÓN NUTRITIVA EN AMBOS CANALES
+            const streamGeo = new THREE.BoxGeometry(1.0, 0.18, 0.62);
+            upperWaterStreamMesh = new THREE.Mesh(streamGeo, materials.nutrientWater);
+            upperWaterStreamMesh.visible = false;
+            upperWaterStreamMesh.renderOrder = 3;
+            scene.add(upperWaterStreamMesh);
+
+            lowerWaterStreamMesh = new THREE.Mesh(streamGeo, materials.nutrientWater);
+            lowerWaterStreamMesh.visible = false;
+            lowerWaterStreamMesh.renderOrder = 3;
+            scene.add(lowerWaterStreamMesh);
+        }
+
+        // ============================================================================
+        // VISUALIZACIÓN DESTACADA DE LA SOLUCIÓN NUTRITIVA («Ver solución nutritiva»)
+        // ============================================================================
+        function buildNutrientSolutionHighlightVisuals() {
+            nutrientHighlightGroup = new THREE.Group();
+            nutrientHighlightGroup.visible = false;
+
+            const highlightMat = new THREE.MeshStandardMaterial({
+                color: 0x14b8a6,
+                emissive: 0x0d9488,
+                emissiveIntensity: 0.45,
+                roughness: 0.15,
+                transparent: true,
+                opacity: 0.65,
+                depthWrite: false
+            });
+
+            // Destacar el recorrido por manguera de impulsión, canales, bajada y retorno
+            const hHose = new THREE.Mesh(
+                new THREE.TubeGeometry(hoseCurveGlobal, 48, 0.055, 12, false),
+                highlightMat
+            );
+            nutrientHighlightGroup.add(hHose);
+
+            const hMid = new THREE.Mesh(
+                new THREE.TubeGeometry(midCurveGlobal, 12, 0.08, 12, false),
+                highlightMat
+            );
+            nutrientHighlightGroup.add(hMid);
+
+            const hRet = new THREE.Mesh(
+                new THREE.TubeGeometry(returnCurveGlobal, 24, 0.08, 12, false),
+                highlightMat
+            );
+            nutrientHighlightGroup.add(hRet);
+
+            // Lámina destacada en canal superior e inferior
+            const pA = new THREE.Vector3(-3.90, 8.42, 0);
+            const pB = new THREE.Vector3(3.90, 8.12, 0);
+            const upperCenter = new THREE.Vector3().addVectors(pA, pB).multiplyScalar(0.5);
+            const upperLen = pA.distanceTo(pB);
+            const upperAngle = Math.atan2(pB.y - pA.y, pB.x - pA.x);
+
+            const hUpper = new THREE.Mesh(new THREE.BoxGeometry(upperLen, 0.17, 0.58), highlightMat);
+            hUpper.position.copy(upperCenter);
+            hUpper.rotation.z = upperAngle;
+            nutrientHighlightGroup.add(hUpper);
+
+            const pRight = new THREE.Vector3(3.90, 5.12, 0);
+            const pLeft = new THREE.Vector3(-3.90, 4.82, 0);
+            const lowerCenter = new THREE.Vector3().addVectors(pRight, pLeft).multiplyScalar(0.5);
+            const lowerLen = pRight.distanceTo(pLeft);
+            const lowerAngle = Math.atan2(pLeft.y - pRight.y, pLeft.x - pRight.x);
+
+            const hLower = new THREE.Mesh(new THREE.BoxGeometry(lowerLen, 0.17, 0.58), highlightMat);
+            hLower.position.copy(lowerCenter);
+            hLower.rotation.z = lowerAngle;
+            nutrientHighlightGroup.add(hLower);
+
+            // Iones/nutrientes minerales disueltos dentro del depósito de 20 L
+            const mineralGeo = new THREE.SphereGeometry(0.055, 10, 10);
+            const mineralMatTeal = new THREE.MeshBasicMaterial({ color: 0x5eead4 });
+            const mineralMatGold = new THREE.MeshBasicMaterial({ color: 0xfde047 });
+
+            for (let i = 0; i < 36; i++) {
+                const mMesh = new THREE.Mesh(mineralGeo, i % 3 === 0 ? mineralMatGold : mineralMatTeal);
+                const rx = -1.05 + (Math.random() - 0.5) * 3.7;
+                const rz = (Math.random() - 0.5) * 2.1;
+                const ryFactor = 0.12 + Math.random() * 0.78;
+                mMesh.renderOrder = 5;
+                nutrientHighlightGroup.add(mMesh);
+                reservoirMineralDots.push({
+                    mesh: mMesh,
+                    x: rx,
+                    z: rz,
+                    yFactor: ryFactor,
+                    phase: Math.random() * Math.PI * 2
+                });
+            }
+
+            scene.add(nutrientHighlightGroup);
+        }
+
+        // ============================================================================
+        // 6. TEMPORIZADOR PROGRAMABLE (Montado sobre la columna frontal izquierda)
+        // ============================================================================
+        function buildProgrammableTimer() {
+            const timerGroup = new THREE.Group();
+            timerGroup.position.set(-4.38, 3.55, 2.13);
+
+            const boxMesh = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.88, 0.36), materials.timerBox);
+            registerSelectable(boxMesh, 'temporizador');
+            timerGroup.add(boxMesh);
+
+            const bezelMesh = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.76, 0.06), materials.timerAccent);
+            bezelMesh.position.set(0, 0, 0.18);
+            registerSelectable(bezelMesh, 'temporizador');
+            timerGroup.add(bezelMesh);
+
+            timerScreenMat = new THREE.MeshStandardMaterial({
+                color: 0xbae6fd,
+                emissive: 0x0284c7,
+                emissiveIntensity: 0.35,
+                roughness: 0.2
+            });
+            const screenMesh = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.26, 0.04), timerScreenMat);
+            screenMesh.position.set(0, 0.16, 0.20);
+            registerSelectable(screenMesh, 'temporizador');
+            timerGroup.add(screenMesh);
+
+            timerLedMesh = new THREE.Mesh(
+                new THREE.SphereGeometry(0.055, 14, 14),
+                new THREE.MeshStandardMaterial({
+                    color: 0x22c55e,
+                    emissive: 0x16a34a,
+                    emissiveIntensity: 0.1
+                })
+            );
+            timerLedMesh.position.set(0.16, -0.14, 0.21);
+            registerSelectable(timerLedMesh, 'temporizador');
+            timerGroup.add(timerLedMesh);
+
+            [-0.14, 0.0].forEach((bx) => {
+                const btn = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.06, 14), materials.sensorFloat);
+                btn.rotation.x = Math.PI / 2;
+                btn.position.set(bx, -0.14, 0.20);
+                registerSelectable(btn, 'temporizador');
+                timerGroup.add(btn);
+            });
+
+            const cableCurve = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(-4.38, 3.10, 2.10),
+                new THREE.Vector3(-4.38, 2.75, 0.40),
+                new THREE.Vector3(-2.40, 2.75, -0.35),
+                new THREE.Vector3(-2.20, 0.85, -0.35)
+            ]);
+            const cableMesh = new THREE.Mesh(
+                new THREE.TubeGeometry(cableCurve, 24, 0.03, 8, false),
+                materials.timerAccent
+            );
+            registerSelectable(cableMesh, 'temporizador');
+            scene.add(cableMesh);
+
+            scene.add(timerGroup);
+        }
+
+        // ============================================================================
+        // 7. LÍNEAS DE COTA 3D LEGIBLES («Mostrar medidas»)
+        // ============================================================================
+        function buildTechnicalDimensions3D() {
+            dimensionsGroup = new THREE.Group();
+
+            const cotaLineMat = new THREE.LineBasicMaterial({ color: 0x0f172a, linewidth: 2 });
+            const cotaAccentMat = new THREE.LineBasicMaterial({ color: 0x0284c7, linewidth: 2 });
+            const tickMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+
+            function addDimensionSegment(p1, p2, ext1Start, ext2Start, mat = cotaLineMat) {
+                const points = [p1, p2];
+                const geo = new THREE.BufferGeometry().setFromPoints(points);
+                dimensionsGroup.add(new THREE.Line(geo, mat));
+
+                if (ext1Start) {
+                    const extGeo1 = new THREE.BufferGeometry().setFromPoints([ext1Start, p1]);
+                    dimensionsGroup.add(new THREE.Line(extGeo1, mat));
+                }
+                if (ext2Start) {
+                    const extGeo2 = new THREE.BufferGeometry().setFromPoints([ext2Start, p2]);
+                    dimensionsGroup.add(new THREE.Line(extGeo2, mat));
+                }
+
+                [p1, p2].forEach((pt) => {
+                    const dot = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 10), tickMat);
+                    dot.position.copy(pt);
+                    dimensionsGroup.add(dot);
+                });
+            }
+
+            // 1. Ancho de la estructura: 90 cm (en el frente exterior Z = 2.85)
+            addDimensionSegment(
+                new THREE.Vector3(-4.5, 0.05, 2.85),
+                new THREE.Vector3(4.5, 0.05, 2.85),
+                new THREE.Vector3(-4.5, 0.05, 2.25),
+                new THREE.Vector3(4.5, 0.05, 2.25)
+            );
+
+            // 2. Profundidad de la estructura: 45 cm (a la derecha exterior X = 5.15)
+            addDimensionSegment(
+                new THREE.Vector3(5.15, 0.05, -2.25),
+                new THREE.Vector3(5.15, 0.05, 2.25),
+                new THREE.Vector3(4.5, 0.05, -2.25),
+                new THREE.Vector3(4.5, 0.05, 2.25)
+            );
+
+            // 3. Alto de la estructura: 100 cm (a la derecha exterior X = 5.55, Z = -2.25)
+            addDimensionSegment(
+                new THREE.Vector3(5.55, 0.0, -2.25),
+                new THREE.Vector3(5.55, 10.0, -2.25),
+                new THREE.Vector3(4.5, 0.0, -2.25),
+                new THREE.Vector3(4.5, 10.0, -2.25)
+            );
+
+            // 4. Largo de los canales de PVC: 80 cm (arriba en Y = 10.75)
+            addDimensionSegment(
+                new THREE.Vector3(-4.0, 10.75, 0),
+                new THREE.Vector3(4.0, 10.75, 0),
+                new THREE.Vector3(-4.0, 8.8, 0),
+                new THREE.Vector3(4.0, 8.5, 0),
+                cotaAccentMat
+            );
+
+            // 5. Separación de 30 cm entre centros de plantines (en el espacio libre entre ambos canales Y = 6.72)
+            addDimensionSegment(
+                new THREE.Vector3(-1.5, 6.72, 0.35),
+                new THREE.Vector3(1.5, 6.72, 0.35),
+                new THREE.Vector3(-1.5, 8.20, 0.35),
+                new THREE.Vector3(1.5, 8.10, 0.35),
+                cotaAccentMat
+            );
+
+            // 6. Cotas verticales de altura de los canales hacia el perímetro exterior (X = -5.15 y X = +5.15)
+            addDimensionSegment(
+                new THREE.Vector3(-5.15, 0.0, 0.6),
+                new THREE.Vector3(-5.15, 8.8, 0.6),
+                new THREE.Vector3(-4.0, 8.8, 0),
+                new THREE.Vector3(-5.15, 8.8, 0.6),
+                cotaAccentMat
+            );
+            addDimensionSegment(
+                new THREE.Vector3(-5.15, 5.2, 0.6),
+                new THREE.Vector3(-4.0, 5.2, 0.0),
+                null,
+                null,
+                cotaAccentMat
+            );
+
+            addDimensionSegment(
+                new THREE.Vector3(5.15, 0.0, 0.6),
+                new THREE.Vector3(5.15, 8.5, 0.6),
+                new THREE.Vector3(4.0, 8.5, 0),
+                new THREE.Vector3(5.15, 8.5, 0.6),
+                cotaAccentMat
+            );
+            addDimensionSegment(
+                new THREE.Vector3(5.15, 5.5, 0.6),
+                new THREE.Vector3(4.0, 5.5, 0.0),
+                null,
+                null,
+                cotaAccentMat
+            );
+
+            scene.add(dimensionsGroup);
+        }
+
+        // ============================================================================
+        // POSICIÓN DE LAS PARTÍCULAS EN EL CIRCUITO COMPLETO
+        // ============================================================================
+        function getPointOnCircuit(s) {
+            // 0.00 -> 0.22: Manguera de impulsión
+            if (s <= 0.22) {
+                const u = THREE.MathUtils.clamp(s / 0.22, 0, 1);
+                return hoseCurveGlobal.getPoint(u);
+            }
+            // 0.22 -> 0.52: Canal superior (de X=-3.68, Y=8.42 a X=+3.65, Y=8.14)
+            if (s <= 0.52) {
+                const u = (s - 0.22) / 0.30;
+                return new THREE.Vector3().lerpVectors(
+                    new THREE.Vector3(-3.68, 8.42, 0),
+                    new THREE.Vector3(3.65, 8.14, 0),
+                    u
+                );
+            }
+            // 0.52 -> 0.62: Conexión entre niveles (bajada en X=+3.65 de Y=8.14 a Y=5.12)
+            if (s <= 0.62) {
+                const u = (s - 0.52) / 0.10;
+                return new THREE.Vector3().lerpVectors(
+                    new THREE.Vector3(3.65, 8.14, 0),
+                    new THREE.Vector3(3.65, 5.12, 0),
+                    u
+                );
+            }
+            // 0.62 -> 0.90: Canal inferior (de X=+3.65, Y=5.12 a X=-3.65, Y=4.84)
+            if (s <= 0.90) {
+                const u = (s - 0.62) / 0.28;
+                return new THREE.Vector3().lerpVectors(
+                    new THREE.Vector3(3.65, 5.12, 0),
+                    new THREE.Vector3(-3.65, 4.84, 0),
+                    u
+                );
+            }
+            // 0.90 -> 1.00: Retorno al depósito
+            const u = THREE.MathUtils.clamp((s - 0.90) / 0.10, 0, 1);
+            return returnCurveGlobal.getPoint(u);
+        }
+
+        function buildFlowParticles() {
+            const dropletGeo = new THREE.SphereGeometry(0.075, 10, 10);
+            const dropletMat = new THREE.MeshBasicMaterial({ color: 0xe0f2fe });
+
+            for (let i = 0; i < NUM_FLOW_PARTICLES; i++) {
+                const mesh = new THREE.Mesh(dropletGeo, dropletMat);
+                mesh.visible = false;
+                mesh.renderOrder = 6;
+                scene.add(mesh);
+                flowParticles.push({
+                    mesh,
+                    s: i / NUM_FLOW_PARTICLES,
+                    zOffset: ((i % 3) - 1) * 0.09
+                });
+            }
+        }
+
+        // ============================================================================
+        // ACTUALIZACIÓN DE LA SIMULACIÓN (FLUJO, TEMPORIZADOR, BOMBA Y SENSOR DE NIVEL)
+        // ============================================================================
+        function updateSimulation(dt) {
+            const nowMs = performance.now();
+
+            // 1. Demostración acelerada del temporizador
+            if (simState.acceleratedDemoActive) {
+                simState.demoTimerClock += dt;
+                const cycleDuration = simState.demoOnDuration + simState.demoOffDuration;
+                const phase = simState.demoTimerClock % cycleDuration;
+                const shouldBeOn = phase < simState.demoOnDuration;
+
+                if (shouldBeOn !== simState.pumpOn) {
+                    simState.pumpOn = shouldBeOn;
+                    updateUIStatus();
+                }
+            }
+
+            // Actualizar LED del temporizador en 3D
+            if (timerLedMesh) {
+                if (simState.pumpOn) {
+                    timerLedMesh.material.color.setHex(0x22c55e);
+                    timerLedMesh.material.emissive.setHex(0x22c55e);
+                    timerLedMesh.material.emissiveIntensity = 0.85;
+                } else {
+                    timerLedMesh.material.color.setHex(0x475569);
+                    timerLedMesh.material.emissive.setHex(0x000000);
+                    timerLedMesh.material.emissiveIntensity = 0;
+                }
+            }
+
+            // 2. Actualizar tramo de circulación [flowTail, flowHead]
+            if (simState.pumpOn) {
+                if (simState.flowTail > 0) {
+                    simState.flowTail = Math.max(0, simState.flowTail - dt * 0.65);
+                }
+                if (simState.flowHead < 1.0) {
+                    simState.flowHead = Math.min(1.0, simState.flowHead + dt * 0.42);
+                }
+            } else {
+                // Cuando la bomba está apagada, se detiene la impulsión y el agua drena rápidamente
+                if (simState.flowHead > 0) {
+                    if (simState.flowTail < 0.22) {
+                        simState.flowTail = 0.22;
+                    }
+                    simState.flowTail = Math.min(1.0, simState.flowTail + dt * 0.65);
+                    if (simState.flowTail >= simState.flowHead - 0.01 || simState.flowTail >= 0.99) {
+                        simState.flowHead = 0.0;
+                        simState.flowTail = 0.0;
+                    }
+                }
+            }
+
+            updateStreamSegments();
+
+            // 3. Mover partículas del agua únicamente cuando la bomba está encendida
+            flowParticles.forEach((p, idx) => {
+                if (simState.pumpOn) {
+                    p.s += dt * 0.26;
+                    if (p.s > 1.0) p.s -= 1.0;
+
+                    if (p.s >= simState.flowTail && p.s <= simState.flowHead) {
+                        const pos = getPointOnCircuit(p.s);
+                        p.mesh.position.set(pos.x, pos.y + 0.03, pos.z + (p.s > 0.22 && p.s < 0.90 ? p.zOffset : 0));
+                        p.mesh.material.color.setHex(simState.nutrientViewActive && idx % 3 === 0 ? 0x5eead4 : 0xe0f2fe);
+                        p.mesh.visible = true;
+                    } else {
+                        p.mesh.visible = false;
+                    }
+                } else {
+                    // Al apagar la bomba se detiene la circulación
+                    p.mesh.visible = false;
+                }
+            });
+
+            // 4. Movimiento visual del agua en la bomba sumergible cuando está encendida vs apagada
+            if (pumpVibrationRing && pumpSecondRing) {
+                if (simState.pumpOn) {
+                    const pulse1 = (Math.sin(nowMs * 0.009) + 1) * 0.5;
+                    const pulse2 = (Math.sin(nowMs * 0.009 - 1.4) + 1) * 0.5;
+                    pumpVibrationRing.material.opacity = 0.45 + pulse1 * 0.45;
+                    pumpVibrationRing.scale.setScalar(0.85 + pulse1 * 0.45);
+                    pumpSecondRing.material.opacity = 0.30 + pulse2 * 0.40;
+                    pumpSecondRing.scale.setScalar(0.90 + pulse2 * 0.55);
+
+                    pumpBubbles.forEach((b) => {
+                        b.phase = (b.phase + dt * 0.95) % 1.0;
+                        b.mesh.visible = true;
+                        b.mesh.position.set(
+                            0.35 * (1 - b.phase) * Math.cos(b.angle + nowMs * 0.004),
+                            -0.10 + b.phase * 0.65,
+                            0.25 * (1 - b.phase) * Math.sin(b.angle + nowMs * 0.004)
+                        );
+                    });
+                } else {
+                    pumpVibrationRing.material.opacity = 0;
+                    pumpSecondRing.material.opacity = 0;
+                    pumpBubbles.forEach((b) => {
+                        b.mesh.visible = false;
+                    });
+                }
+            }
+
+            // 5. Nivel del depósito y sensor de nivel mínimo
+            if (Math.abs(simState.waterLevel - simState.targetWaterLevel) > 0.001) {
+                const dir = Math.sign(simState.targetWaterLevel - simState.waterLevel);
+                simState.waterLevel += dir * dt * 0.30;
+                if ((dir > 0 && simState.waterLevel > simState.targetWaterLevel) ||
+                    (dir < 0 && simState.waterLevel < simState.targetWaterLevel)) {
+                    simState.waterLevel = simState.targetWaterLevel;
+                }
+                updateWaterAndSensorVisuals();
+                updateUIStatus();
+            }
+
+            // Animación sutil de la superficie del agua en el depósito cuando la bomba funciona
+            if (reservoirWaterSurfaceMesh) {
+                const maxWaterHeight = 2.12;
+                const currentHeight = simState.waterLevel * maxWaterHeight;
+                const baseLocalY = -2.4 / 2 + 0.08;
+                const waveOffset = simState.pumpOn ? Math.sin(nowMs * 0.008) * 0.018 : 0;
+                reservoirWaterSurfaceMesh.position.y = baseLocalY + currentHeight + waveOffset;
+            }
+
+            // Animación de los nutrientes minerales disueltos en el depósito cuando «Ver solución nutritiva» está activo
+            if (simState.nutrientViewActive && nutrientHighlightGroup && nutrientHighlightGroup.visible) {
+                const maxWaterHeight = 2.12;
+                const currentHeight = simState.waterLevel * maxWaterHeight;
+                const worldWaterBottom = 0.24 + 0.08; // 0.32
+                reservoirMineralDots.forEach((d) => {
+                    const bob = simState.pumpOn ? Math.sin(nowMs * 0.005 + d.phase) * 0.05 : Math.sin(nowMs * 0.0015 + d.phase) * 0.015;
+                    const wy = worldWaterBottom + d.yFactor * currentHeight + bob;
+                    d.mesh.position.set(d.x, wy, d.z);
+                });
+            }
+
+            // Parpadeo luminoso de la luz de aviso si está en el nivel mínimo
+            const isAtMinimum = simState.waterLevel <= simState.minWaterLevel + 0.015;
+            if (warningLightBulbMesh && warningLightHaloMesh && warningPointLight) {
+                if (isAtMinimum) {
+                    const blink = (Math.sin(nowMs * 0.012) + 1) * 0.5;
+                    warningLightBulbMesh.material.color.setHex(0xff2222);
+                    warningLightBulbMesh.material.emissive.setHex(0xdc2626);
+                    warningLightBulbMesh.material.emissiveIntensity = 0.7 + blink * 0.8;
+                    warningLightHaloMesh.material.opacity = 0.28 + blink * 0.42;
+                    warningPointLight.intensity = 1.2 + blink * 1.4;
+                } else {
+                    warningLightBulbMesh.material.color.setHex(0x7f1d1d);
+                    warningLightBulbMesh.material.emissive.setHex(0x000000);
+                    warningLightBulbMesh.material.emissiveIntensity = 0;
+                    warningLightHaloMesh.material.opacity = 0.0;
+                    warningPointLight.intensity = 0;
+                }
+            }
+
+            // 6. Simulación animada e independiente del crecimiento de las 4 lechugas y raíces (~15 segundos)
+            if (simState.growthPlaying) {
+                simState.growthProgress = Math.min(1.0, simState.growthProgress + dt / simState.growthDuration);
+                updateLettuceGrowthVisuals(simState.growthProgress);
+                if (simState.growthProgress >= 1.0) {
+                    simState.growthPlaying = false;
+                    simState.growthPaused = false;
+                }
+                updateGrowthUI();
+            }
+
+            updateFlowBadgeText();
+        }
+
+        function updateStreamSegments() {
+            const tail = simState.flowTail;
+            const head = simState.flowHead;
+
+            risingHoseWaterMesh.visible = simState.pumpOn && head > 0.02;
+
+            // Canal superior [0.22, 0.52]: X=-3.90, Y=8.42 -> X=+3.90, Y=8.12
+            const uStart = Math.max(0.22, tail);
+            const uEnd = Math.min(0.52, head);
+            if (uEnd > uStart + 0.005) {
+                const f1 = (uStart - 0.22) / 0.30;
+                const f2 = (uEnd - 0.22) / 0.30;
+                const pA = new THREE.Vector3(-3.90, 8.42, 0);
+                const pB = new THREE.Vector3(3.90, 8.12, 0);
+                const segStart = new THREE.Vector3().lerpVectors(pA, pB, f1);
+                const segEnd = new THREE.Vector3().lerpVectors(pA, pB, f2);
+                const center = new THREE.Vector3().addVectors(segStart, segEnd).multiplyScalar(0.5);
+                const len = segStart.distanceTo(segEnd);
+                const angle = Math.atan2(pB.y - pA.y, pB.x - pA.x);
+
+                upperWaterStreamMesh.visible = true;
+                upperWaterStreamMesh.position.copy(center);
+                upperWaterStreamMesh.rotation.z = angle;
+                upperWaterStreamMesh.scale.set(Math.max(0.05, len), 1, 1);
+            } else {
+                upperWaterStreamMesh.visible = false;
+            }
+
+            // Conexión entre niveles [0.52, 0.62]
+            midConnectorWaterMesh.visible = head > 0.52 && tail < 0.62;
+
+            // Canal inferior [0.62, 0.90]: X=+3.90, Y=5.12 -> X=-3.90, Y=4.82
+            const lStart = Math.max(0.62, tail);
+            const lEnd = Math.min(0.90, head);
+            if (lEnd > lStart + 0.005) {
+                const f1 = (lStart - 0.62) / 0.28;
+                const f2 = (lEnd - 0.62) / 0.28;
+                const pRight = new THREE.Vector3(3.90, 5.12, 0);
+                const pLeft = new THREE.Vector3(-3.90, 4.82, 0);
+                const segStart = new THREE.Vector3().lerpVectors(pRight, pLeft, f1);
+                const segEnd = new THREE.Vector3().lerpVectors(pRight, pLeft, f2);
+                const center = new THREE.Vector3().addVectors(segStart, segEnd).multiplyScalar(0.5);
+                const len = segStart.distanceTo(segEnd);
+                const angle = Math.atan2(pLeft.y - pRight.y, pLeft.x - pRight.x);
+
+                lowerWaterStreamMesh.visible = true;
+                lowerWaterStreamMesh.position.copy(center);
+                lowerWaterStreamMesh.rotation.z = angle;
+                lowerWaterStreamMesh.scale.set(Math.max(0.05, len), 1, 1);
+            } else {
+                lowerWaterStreamMesh.visible = false;
+            }
+
+            // Retorno al depósito [0.90, 1.00]
+            returnPipeWaterMesh.visible = head > 0.90 && tail < 0.99;
+        }
+
+        function updateWaterAndSensorVisuals() {
+            const maxWaterHeight = 2.12;
+            const currentHeight = simState.waterLevel * maxWaterHeight;
+            const baseLocalY = -2.4 / 2 + 0.08;
+
+            if (reservoirWaterMesh) {
+                reservoirWaterMesh.scale.y = Math.max(0.05, currentHeight);
+            }
+            if (reservoirWaterSurfaceMesh) {
+                reservoirWaterSurfaceMesh.position.set(0, baseLocalY + currentHeight, 0);
+            }
+            if (sensorFloatCollarGroup) {
+                sensorFloatCollarGroup.position.y = baseLocalY + currentHeight;
+            }
+        }
+
+        // ============================================================================
+        // OPCIÓN INTERACTIVA: «VER SOLUCIÓN NUTRITIVA»
+        // ============================================================================
+        function updateNutrientSolutionVisuals() {
+            const banner = document.getElementById('nutrient-solution-banner');
+            const btnNutrientView = document.getElementById('btn-toggle-nutrient-view');
+
+            if (simState.nutrientViewActive) {
+                // Asegurar que la vista interior esté activa para mostrar el líquido dentro del depósito
+                if (!simState.semitransparentView) {
+                    simState.semitransparentView = true;
+                    applyInteriorViewMode();
+                }
+
+                if (nutrientHighlightGroup) {
+                    nutrientHighlightGroup.visible = true;
+                }
+
+                // Tono mineral verde-agua educativo para destacar la solución nutritiva
+                materials.nutrientWater.color.setHex(0x0d9488);
+                materials.nutrientWater.emissive.setHex(0x0f766e);
+                materials.nutrientWater.emissiveIntensity = 0.35;
+                materials.reservoirWaterVol.color.setHex(0x0d9488);
+                materials.reservoirWaterVol.emissive.setHex(0x0f766e);
+                materials.reservoirWaterVol.emissiveIntensity = 0.30;
+                materials.reservoirWaterVol.opacity = 0.44;
+                materials.waterSurface.color.setHex(0x2dd4bf);
+
+                if (banner) banner.classList.remove('hidden');
+                if (btnNutrientView) {
+                    btnNutrientView.textContent = "Ocultar solución";
+                    btnNutrientView.className = "py-1 px-1 rounded-lg font-bold text-[9.5px] sm:text-[11px] text-white bg-teal-600 hover:bg-teal-700 border border-teal-700 active:scale-[0.99] transition leading-tight shadow-sm";
+                }
+            } else {
+                if (nutrientHighlightGroup) {
+                    nutrientHighlightGroup.visible = false;
+                }
+
+                materials.nutrientWater.color.setHex(0x0284c7);
+                materials.nutrientWater.emissive.setHex(0x0369a1);
+                materials.nutrientWater.emissiveIntensity = 0.22;
+                materials.reservoirWaterVol.color.setHex(0x0284c7);
+                materials.reservoirWaterVol.emissive.setHex(0x0369a1);
+                materials.reservoirWaterVol.emissiveIntensity = 0.18;
+                materials.reservoirWaterVol.opacity = 0.36;
+                materials.waterSurface.color.setHex(0x38bdf8);
+
+                if (banner) banner.classList.add('hidden');
+                if (btnNutrientView) {
+                    btnNutrientView.textContent = "Ver solución nutritiva";
+                    btnNutrientView.className = "py-1 px-1 rounded-lg font-bold text-[9.5px] sm:text-[11px] text-teal-950 bg-teal-100 hover:bg-teal-200 border border-teal-400 active:scale-[0.99] transition leading-tight";
+                }
+            }
+        }
+
+        // ============================================================================
+        // ALTERNAR ENTRE VISTA EXTERIOR (OPACA CON TAPA) Y VISTA INTERIOR (SEMITRANSPARENTE)
+        // ============================================================================
+        function applyInteriorViewMode() {
+            const btnInterior = document.getElementById('btn-toggle-interior');
+
+            if (simState.semitransparentView) {
+                materials.channelWall.transparent = true;
+                materials.channelWall.opacity = 0.66;
+                materials.channelWall.depthWrite = false;
+
+                materials.reservoirWall.transparent = true;
+                materials.reservoirWall.opacity = 0.32;
+                materials.reservoirWall.depthWrite = false;
+
+                materials.reservoirLid.transparent = true;
+                materials.reservoirLid.opacity = 0.42;
+                materials.reservoirLid.depthWrite = false;
+
+                materials.pipeWall.transparent = true;
+                materials.pipeWall.opacity = 0.46;
+
+                btnInterior.textContent = "Vista: Interior";
+                btnInterior.className = "py-1 px-1.5 rounded-lg font-bold text-[10px] sm:text-[11px] bg-indigo-600 text-white hover:bg-indigo-700 transition shadow-sm truncate";
+            } else {
+                materials.channelWall.transparent = false;
+                materials.channelWall.opacity = 1.0;
+                materials.channelWall.depthWrite = true;
+
+                materials.reservoirWall.transparent = false;
+                materials.reservoirWall.opacity = 1.0;
+                materials.reservoirWall.depthWrite = true;
+
+                materials.reservoirLid.transparent = false;
+                materials.reservoirLid.opacity = 1.0;
+                materials.reservoirLid.depthWrite = true;
+
+                materials.pipeWall.transparent = false;
+                materials.pipeWall.opacity = 1.0;
+
+                btnInterior.textContent = "Ver el interior";
+                btnInterior.className = "py-1 px-1.5 rounded-lg font-bold text-[10px] sm:text-[11px] bg-slate-700 text-white hover:bg-slate-800 transition shadow-sm truncate";
+            }
+
+            materials.channelWall.needsUpdate = true;
+            materials.reservoirWall.needsUpdate = true;
+            materials.reservoirLid.needsUpdate = true;
+            materials.pipeWall.needsUpdate = true;
+        }
+
+        // ============================================================================
+        // SELECCIÓN DE PIEZAS Y DEMOSTRACIÓN ACELERADA DEL TEMPORIZADOR
+        // ============================================================================
+        function selectPart(partKey) {
+            simState.selectedPart = partKey;
+
+            Object.keys(partGroups).forEach((key) => {
+                partGroups[key].forEach((mesh) => {
+                    if (mesh.material && mesh.material.emissive && mesh !== warningLightBulbMesh && mesh !== timerLedMesh) {
+                        if (mesh.material === materials.minLevelMark) {
+                            mesh.material.emissive.setHex(0x991b1b);
+                            mesh.material.emissiveIntensity = 0.3;
+                        } else if (mesh.material === materials.nutrientWater || mesh.material === materials.reservoirWaterVol) {
+                            mesh.material.emissive.setHex(simState.nutrientViewActive ? 0x0f766e : 0x0369a1);
+                            mesh.material.emissiveIntensity = simState.nutrientViewActive ? 0.35 : 0.20;
+                        } else if (mesh.material === materials.pumpAccent) {
+                            mesh.material.emissive.setHex(0x0891b2);
+                            mesh.material.emissiveIntensity = 0.18;
+                        } else if (mesh.material === timerScreenMat) {
+                            mesh.material.emissive.setHex(0x0284c7);
+                            mesh.material.emissiveIntensity = 0.35;
+                        } else {
+                            mesh.material.emissive.setHex(0x000000);
+                            mesh.material.emissiveIntensity = 0;
+                        }
+                    }
+                });
+            });
+
+            document.querySelectorAll('.part-btn').forEach((btn) => {
+                const isSelected = btn.getAttribute('data-part') === partKey;
+                const extraSpan = btn.getAttribute('data-part') === 'temporizador' ? ' md:col-span-2 lg:col-span-1' : '';
+                if (isSelected) {
+                    btn.className = `part-btn py-1 px-1 rounded-lg font-bold text-[10px] sm:text-[10.5px] bg-emerald-600 border border-emerald-700 text-white shadow-sm transition leading-tight${extraSpan}`;
+                } else {
+                    btn.className = `part-btn py-1 px-1 rounded-lg font-bold text-[10px] sm:text-[10.5px] bg-white border border-slate-300 text-slate-800 hover:bg-emerald-50 hover:border-emerald-400 transition leading-tight${extraSpan}`;
+                }
+            });
+
+            const infoCard = document.getElementById('part-info-card');
+            const titleEl = document.getElementById('part-info-title');
+            const techEl = document.getElementById('part-info-tech');
+            const descEl = document.getElementById('part-info-desc');
+            const timerDemoPanel = document.getElementById('timer-demo-panel');
+
+            if (partKey && PART_DESCRIPTIONS[partKey]) {
+                // Si selecciona la bomba y estaba en vista exterior opaca, activar vista interior para verla
+                if (partKey === 'bomba' && !simState.semitransparentView) {
+                    simState.semitransparentView = true;
+                    applyInteriorViewMode();
+                }
+
+                partGroups[partKey].forEach((mesh) => {
+                    if (mesh.material && mesh.material.emissive && mesh.material !== materials.nutrientWater && mesh.material !== materials.reservoirWaterVol && mesh !== warningLightBulbMesh) {
+                        mesh.material.emissive.setHex(0x10b981);
+                        mesh.material.emissiveIntensity = 0.38;
+                    }
+                });
+
+                titleEl.textContent = PART_DESCRIPTIONS[partKey].title;
+                techEl.textContent = PART_DESCRIPTIONS[partKey].tech;
+                descEl.textContent = PART_DESCRIPTIONS[partKey].sentence;
+
+                if (partKey === 'temporizador') {
+                    timerDemoPanel.classList.remove('hidden');
+                } else {
+                    timerDemoPanel.classList.add('hidden');
+                }
+
+                infoCard.classList.remove('hidden');
+            } else {
+                infoCard.classList.add('hidden');
+            }
+        }
+
+        function toggleAcceleratedTimerDemo() {
+            simState.acceleratedDemoActive = !simState.acceleratedDemoActive;
+            if (simState.acceleratedDemoActive) {
+                simState.demoTimerClock = 0;
+                simState.pumpOn = true;
+            }
+            updateUIStatus();
+        }
+
+        // ============================================================================
+        // ACTUALIZACIÓN DE LA INTERFAZ Y ESTADO
+        // ============================================================================
+        function syncLabelAndMeasureButtons() {
+            const btnLabels = document.getElementById('btn-toggle-labels');
+            if (btnLabels) {
+                if (simState.showLabels) {
+                    btnLabels.textContent = "Ocultar carteles 3D";
+                    btnLabels.className = "py-1 px-1 rounded-lg font-bold text-[9.5px] sm:text-[11px] bg-sky-700 text-white hover:bg-sky-800 transition shadow-sm leading-tight";
+                } else {
+                    btnLabels.textContent = "Mostrar carteles 3D";
+                    btnLabels.className = "py-1 px-1 rounded-lg font-bold text-[9.5px] sm:text-[11px] bg-sky-100 text-sky-900 border border-sky-300 hover:bg-sky-200 transition shadow-sm leading-tight";
+                }
+            }
+
+            const dimCard = document.getElementById('dimensions-summary-card');
+            if (dimCard) {
+                dimCard.style.opacity = simState.showLabels ? '1' : '0';
+            }
+
+            const btnMeasures = document.getElementById('btn-toggle-measures');
+            if (btnMeasures) {
+                if (simState.showMeasures) {
+                    btnMeasures.textContent = "Ocultar medidas";
+                    btnMeasures.className = "py-1 px-1 rounded-lg font-bold text-[9.5px] sm:text-[11px] bg-slate-800 text-amber-300 hover:bg-slate-900 transition shadow-sm leading-tight";
+                } else {
+                    btnMeasures.textContent = "Mostrar medidas";
+                    btnMeasures.className = "py-1 px-1 rounded-lg font-bold text-[9.5px] sm:text-[11px] bg-amber-400 text-slate-950 hover:bg-amber-500 transition shadow-sm leading-tight";
+                }
+            }
+        }
+
+        function updateUIStatus() {
+            const btnPump = document.getElementById('btn-pump-toggle');
+            const lblPump = document.getElementById('btn-pump-label');
+            const statusPumpPill = document.getElementById('status-pump-pill');
+            const statusPumpDot = document.getElementById('status-pump-dot');
+            const statusPumpText = document.getElementById('status-pump-text');
+
+            if (simState.pumpOn) {
+                lblPump.textContent = "Apagar bomba";
+                btnPump.className = "py-1.5 px-1.5 sm:px-2 rounded-lg font-bold text-[11px] sm:text-xs text-white bg-rose-600 hover:bg-rose-700 active:scale-[0.99] transition shadow-sm flex items-center justify-center text-center leading-tight";
+                statusPumpPill.className = "flex items-center gap-1 px-2 py-0.5 sm:py-1 rounded-lg bg-emerald-50 text-emerald-900 border border-emerald-300";
+                statusPumpDot.className = "w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-emerald-500 animate-ping";
+                statusPumpText.textContent = "Bomba: Encendida";
+            } else {
+                lblPump.textContent = "Encender bomba";
+                btnPump.className = "py-1.5 px-1.5 sm:px-2 rounded-lg font-bold text-[11px] sm:text-xs text-white bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] transition shadow-sm flex items-center justify-center text-center leading-tight";
+                statusPumpPill.className = "flex items-center gap-1 px-2 py-0.5 sm:py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-300";
+                statusPumpDot.className = "w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-slate-400";
+                statusPumpText.textContent = "Bomba: Apagada";
+            }
+
+            // Estado de la Demostración Acelerada del Temporizador
+            const btnTimerDemo = document.getElementById('btn-timer-demo');
+            const lblTimerDemo = document.getElementById('btn-timer-demo-label');
+            const btnCardTimer = document.getElementById('btn-card-timer-demo');
+            const statusTimerPill = document.getElementById('status-timer-pill');
+
+            if (simState.acceleratedDemoActive) {
+                lblTimerDemo.textContent = "Detener demo";
+                btnTimerDemo.className = "py-1.5 px-1.5 rounded-lg font-bold text-[10px] sm:text-[11px] bg-amber-600 hover:bg-amber-700 text-white border border-amber-700 transition flex items-center justify-center text-center leading-tight shadow-sm";
+                if (btnCardTimer) {
+                    btnCardTimer.textContent = "Detener demostración acelerada";
+                    btnCardTimer.className = "shrink-0 py-1.5 px-3 rounded-lg font-bold text-xs bg-rose-600 hover:bg-rose-700 text-white shadow transition";
+                }
+                statusTimerPill.classList.remove('hidden');
+                statusTimerPill.classList.add('flex');
+            } else {
+                lblTimerDemo.textContent = "Demo acelerada";
+                btnTimerDemo.className = "py-1.5 px-1.5 rounded-lg font-bold text-[10px] sm:text-[11px] bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 transition flex items-center justify-center text-center leading-tight";
+                if (btnCardTimer) {
+                    btnCardTimer.textContent = "Iniciar demostración acelerada";
+                    btnCardTimer.className = "shrink-0 py-1.5 px-3 rounded-lg font-bold text-xs bg-amber-600 hover:bg-amber-700 text-white shadow transition";
+                }
+                statusTimerPill.classList.add('hidden');
+                statusTimerPill.classList.remove('flex');
+            }
+
+            // Estado del sensor de nivel y la luz de aviso
+            const isAtMinimum = simState.waterLevel <= simState.minWaterLevel + 0.015;
+            const alertBanner = document.getElementById('low-level-alert');
+            const statusLevelPill = document.getElementById('status-level-pill');
+            const statusLevelDot = document.getElementById('status-level-dot');
+            const statusLevelText = document.getElementById('status-level-text');
+            const levelBadge = document.getElementById('level-percent-badge');
+
+            if (isAtMinimum) {
+                alertBanner.classList.remove('hidden');
+                statusLevelPill.className = "flex items-center gap-1 px-2 py-0.5 sm:py-1 rounded-lg bg-red-100 text-red-900 border border-red-300";
+                statusLevelDot.className = "w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-red-600 animate-ping";
+                statusLevelText.textContent = "Luz aviso: ENCENDIDA";
+                levelBadge.textContent = "Nivel mínimo";
+                levelBadge.className = "text-[9px] sm:text-[10px] font-extrabold text-red-800 bg-red-100 px-1.5 py-0.5 rounded truncate";
+            } else {
+                alertBanner.classList.add('hidden');
+                statusLevelPill.className = "flex items-center gap-1 px-2 py-0.5 sm:py-1 rounded-lg bg-sky-50 text-sky-900 border border-sky-200";
+                statusLevelDot.className = "w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-sky-600";
+                statusLevelText.textContent = "Sensor: Nivel normal";
+                levelBadge.textContent = "20 L · Normal";
+                levelBadge.className = "text-[9px] sm:text-[10px] font-bold text-sky-800 bg-sky-100 px-1.5 py-0.5 rounded truncate";
+            }
+        }
+
+        function updateFlowBadgeText() {
+            const badge = document.getElementById('flow-state-badge');
+            if (simState.pumpOn) {
+                if (simState.flowHead < 1.0) {
+                    badge.textContent = simState.acceleratedDemoActive ? "Demo: Subiendo" : "Impulsando...";
+                    badge.className = "text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 truncate";
+                } else {
+                    badge.textContent = simState.acceleratedDemoActive ? "Demo: Activa" : "Recirculando";
+                    badge.className = "text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 truncate";
+                }
+            } else {
+                badge.textContent = simState.acceleratedDemoActive ? "Demo: Pausa" : "Detenida";
+                badge.className = "text-[9px] sm:text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 truncate";
+            }
+        }
+
+        // ============================================================================
+        // CÁMARA ADAPTATIVA Y PROYECCIÓN DE CARTELES SIN SUPERPOSICIÓN
+        // ============================================================================
+        function computeResponsiveCameraDefaults() {
+            if (!container) return;
+            const w = container.clientWidth || window.innerWidth;
+            const h = container.clientHeight || window.innerHeight;
+            const aspect = w / Math.max(1, h);
+
+            if (camera) {
+                camera.fov = aspect < 0.85 ? 44 : 38;
+                camera.updateProjectionMatrix();
+            }
+
+            const fovRad = THREE.MathUtils.degToRad(camera ? camera.fov : 38);
+            const tanHalfFov = Math.tan(fovRad * 0.5);
+
+            const bottomBar = document.getElementById('bottom-controls');
+            const bottomH = bottomBar ? bottomBar.offsetHeight + 16 : (aspect < 0.85 ? 195 : 115);
+            const bottomFraction = Math.min(0.42, bottomH / Math.max(300, h));
+
+            // Asegurar que entren tanto el ancho total (incluyendo cotas laterales) como el alto total sobre la barra inferior
+            const requiredHalfWidth = aspect < 0.85 ? 5.6 : 6.8;
+            const distForWidth = requiredHalfWidth / Math.max(0.18, aspect * tanHalfFov);
+            const requiredHalfHeight = 6.5;
+            const distForHeight = requiredHalfHeight / ((1 - bottomFraction * 0.88) * tanHalfFov);
+
+            cameraControl.defaultRadius = THREE.MathUtils.clamp(Math.max(distForWidth, distForHeight, 21.2), 20.5, 42.0);
+            const targetYOffset = bottomFraction * cameraControl.defaultRadius * tanHalfFov * 0.68;
+            cameraControl.defaultTarget.set(0, 5.15 - targetYOffset, 0);
+        }
+
+        function updateCameraPosition() {
+            cameraControl.phi = THREE.MathUtils.clamp(cameraControl.phi, 0.35, Math.PI * 0.49);
+            cameraControl.radius = THREE.MathUtils.clamp(cameraControl.radius, 8.0, 45.0);
+
+            const x = cameraControl.target.x + cameraControl.radius * Math.sin(cameraControl.phi) * Math.sin(cameraControl.theta);
+            const y = cameraControl.target.y + cameraControl.radius * Math.cos(cameraControl.phi);
+            const z = cameraControl.target.z + cameraControl.radius * Math.sin(cameraControl.phi) * Math.cos(cameraControl.theta);
+
+            camera.position.set(x, y, z);
+            camera.lookAt(cameraControl.target);
+            updateClassroomWallVisibility();
+        }
+
+        function resetCameraView() {
+            computeResponsiveCameraDefaults();
+            cameraControl.theta = cameraControl.defaultTheta;
+            cameraControl.phi = cameraControl.defaultPhi;
+            cameraControl.radius = cameraControl.defaultRadius;
+            cameraControl.target.copy(cameraControl.defaultTarget);
+            updateCameraPosition();
+        }
+
+        function updateProjectedLabels() {
+            if (!container) return;
+            const cw = container.clientWidth;
+            const ch = container.clientHeight;
+            const bottomBar = document.getElementById('bottom-controls');
+            const bottomBarHeight = bottomBar ? bottomBar.offsetHeight + 14 : 130;
+            const minSafeY = 22;
+            const maxSafeY = Math.max(120, ch - bottomBarHeight - 12);
+
+            const activeItems = [];
+
+            function collectTag(vec3, el, isVisible) {
+                if (!el) return;
+                if (!isVisible) {
+                    el.style.opacity = '0';
+                    return;
+                }
+                const projected = vec3.clone().project(camera);
+                if (projected.z > 1) {
+                    el.style.opacity = '0';
+                    return;
+                }
+                const w = el.offsetWidth || 110;
+                const h = el.offsetHeight || 22;
+                const halfW = w * 0.5 + 6;
+                const halfH = h * 0.5 + 3;
+
+                const sx = THREE.MathUtils.clamp((projected.x * 0.5 + 0.5) * cw, halfW, cw - halfW);
+                const sy = THREE.MathUtils.clamp((-projected.y * 0.5 + 0.5) * ch, minSafeY, maxSafeY);
+
+                activeItems.push({ el, x: sx, y: sy, w, h });
+            }
+
+            if (pumpLeaderLine) {
+                pumpLeaderLine.visible = simState.showLabels && simState.semitransparentView;
+            }
+
+            // Etiquetas informativas 3D y de flujo
+            collectTag(labelAnchors.upperSlope, document.getElementById('label-upper-slope'), simState.showLabels);
+            collectTag(labelAnchors.lowerSlope, document.getElementById('label-lower-slope'), simState.showLabels);
+            collectTag(labelAnchors.pump, document.getElementById('label-pump'), simState.showLabels && simState.semitransparentView);
+
+            // Etiquetas de cotas (visibles cuando medidas y carteles 3D están activos)
+            const showCotaTags = simState.showMeasures && simState.showLabels;
+            Object.keys(cotaAnchors).forEach((id) => {
+                collectTag(cotaAnchors[id], document.getElementById(id), showCotaTags);
+            });
+
+            // Separación automática en pantalla para evitar que dos carteles se superpongan entre sí
+            for (let pass = 0; pass < 3; pass++) {
+                for (let i = 0; i < activeItems.length; i++) {
+                    for (let j = i + 1; j < activeItems.length; j++) {
+                        const a = activeItems[i];
+                        const b = activeItems[j];
+                        const dx = Math.abs(a.x - b.x);
+                        const dy = Math.abs(a.y - b.y);
+                        const minX = (a.w + b.w) * 0.5 + 4;
+                        const minY = (a.h + b.h) * 0.5 + 4;
+
+                        if (dx < minX && dy < minY) {
+                            const pushY = (minY - dy) * 0.55;
+                            if (a.y <= b.y) {
+                                a.y = Math.max(minSafeY, a.y - pushY);
+                                b.y = Math.min(maxSafeY, b.y + pushY);
+                            } else {
+                                a.y = Math.min(maxSafeY, a.y + pushY);
+                                b.y = Math.max(minSafeY, b.y - pushY);
+                            }
+                        }
+                    }
+                }
+            }
+
+            activeItems.forEach((item) => {
+                item.el.style.left = `${item.x}px`;
+                item.el.style.top = `${item.y}px`;
+                item.el.style.opacity = '1';
+            });
+        }
+
+        // ============================================================================
+        // EVENTOS DE INTERACCIÓN
+        // ============================================================================
+        function setupInteractionEvents() {
+            // Encender y apagar la bomba manualmente
+            document.getElementById('btn-pump-toggle').addEventListener('click', () => {
+                simState.acceleratedDemoActive = false;
+                simState.pumpOn = !simState.pumpOn;
+                updateUIStatus();
+            });
+
+            // Botón de «Demostración acelerada» del temporizador
+            document.getElementById('btn-timer-demo').addEventListener('click', () => {
+                toggleAcceleratedTimerDemo();
+                selectPart('temporizador');
+            });
+
+            document.getElementById('btn-card-timer-demo').addEventListener('click', () => {
+                toggleAcceleratedTimerDemo();
+            });
+
+            // Simular descenso al mínimo y rellenar el depósito de 20 L
+            document.getElementById('btn-drop-level').addEventListener('click', () => {
+                simState.targetWaterLevel = simState.minWaterLevel;
+            });
+
+            document.getElementById('btn-refill-level').addEventListener('click', () => {
+                simState.targetWaterLevel = simState.normalWaterLevel;
+            });
+
+            // Opción interactiva «Ver solución nutritiva»
+            document.getElementById('btn-toggle-nutrient-view').addEventListener('click', () => {
+                simState.nutrientViewActive = !simState.nutrientViewActive;
+                updateNutrientSolutionVisuals();
+            });
+
+            document.getElementById('btn-close-nutrient-banner').addEventListener('click', () => {
+                simState.nutrientViewActive = false;
+                updateNutrientSolutionVisuals();
+            });
+
+            // Control informativo «Nutrientes» (abre ventana pequeña con explicación y esquema visual)
+            const nutrientsModal = document.getElementById('nutrients-info-modal');
+            document.getElementById('btn-nutrients-info').addEventListener('click', () => {
+                nutrientsModal.classList.toggle('hidden');
+            });
+
+            document.getElementById('btn-close-nutrients-modal').addEventListener('click', () => {
+                nutrientsModal.classList.add('hidden');
+            });
+
+            document.getElementById('btn-accept-nutrients-modal').addEventListener('click', () => {
+                nutrientsModal.classList.add('hidden');
+            });
+
+            // Botón «Ocultar carteles 3D» / «Mostrar carteles 3D»
+            document.getElementById('btn-toggle-labels').addEventListener('click', () => {
+                simState.showLabels = !simState.showLabels;
+                syncLabelAndMeasureButtons();
+            });
+
+            // Botón «Mostrar medidas» / «Ocultar medidas»
+            document.getElementById('btn-toggle-measures').addEventListener('click', () => {
+                simState.showMeasures = !simState.showMeasures;
+                if (dimensionsGroup) {
+                    dimensionsGroup.visible = simState.showMeasures;
+                }
+                // Si el usuario pide mostrar medidas en móvil, activar también los carteles para que vea los valores
+                if (simState.showMeasures && !simState.showLabels) {
+                    simState.showLabels = true;
+                }
+                syncLabelAndMeasureButtons();
+            });
+
+            // Alternar vista interior / exterior
+            document.getElementById('btn-toggle-interior').addEventListener('click', () => {
+                simState.semitransparentView = !simState.semitransparentView;
+                applyInteriorViewMode();
+            });
+
+            // Recuperar vista inicial
+            document.getElementById('btn-reset-camera').addEventListener('click', () => {
+                resetCameraView();
+            });
+
+            // Selección de piezas (Bomba, Canales, Depósito, Sensor, Temporizador)
+            document.querySelectorAll('.part-btn').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const partKey = btn.getAttribute('data-part');
+                    if (simState.selectedPart === partKey) {
+                        selectPart(null);
+                    } else {
+                        selectPart(partKey);
+                    }
+                });
+            });
+
+            document.getElementById('btn-close-info').addEventListener('click', () => {
+                selectPart(null);
+            });
+
+            // 5. Controles de simulación del crecimiento de las 4 lechugas y raíces
+            const growthBanner = document.getElementById('growth-stage-banner');
+
+            document.getElementById('btn-growth-start').addEventListener('click', () => {
+                // Si estaba al final o detenido, inicia desde plantín pequeño (0.0)
+                if (simState.growthProgress >= 0.995 || (!simState.growthPlaying && !simState.growthPaused)) {
+                    simState.growthProgress = 0.0;
+                    updateLettuceGrowthVisuals(0.0);
+                }
+                simState.growthPlaying = true;
+                simState.growthPaused = false;
+                if (growthBanner) growthBanner.classList.remove('hidden');
+                updateGrowthUI();
+            });
+
+            document.getElementById('btn-growth-pause').addEventListener('click', () => {
+                if (simState.growthPlaying) {
+                    simState.growthPlaying = false;
+                    simState.growthPaused = true;
+                } else if (simState.growthPaused && simState.growthProgress < 1.0) {
+                    simState.growthPlaying = true;
+                    simState.growthPaused = false;
+                }
+                if (growthBanner) growthBanner.classList.remove('hidden');
+                updateGrowthUI();
+            });
+
+            document.getElementById('btn-growth-reset').addEventListener('click', () => {
+                simState.growthPlaying = false;
+                simState.growthPaused = false;
+                simState.growthProgress = 0.0;
+                updateLettuceGrowthVisuals(0.0);
+                updateGrowthUI();
+            });
+
+            const btnCloseGrowthBanner = document.getElementById('btn-close-growth-banner');
+            if (btnCloseGrowthBanner) {
+                btnCloseGrowthBanner.addEventListener('click', () => {
+                    if (growthBanner) growthBanner.classList.add('hidden');
+                });
+            }
+
+            // Rotación y zoom con mouse y pantalla táctil
+            const domElem = renderer.domElement;
+
+            domElem.addEventListener('mousedown', (e) => {
+                cameraControl.isDragging = true;
+                cameraControl.prevX = e.clientX;
+                cameraControl.prevY = e.clientY;
+                cameraControl.pointerDownX = e.clientX;
+                cameraControl.pointerDownY = e.clientY;
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!cameraControl.isDragging) return;
+                const dx = e.clientX - cameraControl.prevX;
+                const dy = e.clientY - cameraControl.prevY;
+                cameraControl.prevX = e.clientX;
+                cameraControl.prevY = e.clientY;
+
+                cameraControl.theta -= dx * 0.007;
+                cameraControl.phi -= dy * 0.007;
+                updateCameraPosition();
+            });
+
+            window.addEventListener('mouseup', (e) => {
+                if (!cameraControl.isDragging) return;
+                cameraControl.isDragging = false;
+
+                const moveDist = Math.hypot(e.clientX - cameraControl.pointerDownX, e.clientY - cameraControl.pointerDownY);
+                if (moveDist < 6 && e.target === domElem) {
+                    handleCanvasTap(e.clientX, e.clientY);
+                }
+            });
+
+            domElem.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                cameraControl.radius += e.deltaY * 0.008;
+                updateCameraPosition();
+            }, { passive: false });
+
+            domElem.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    cameraControl.isDragging = true;
+                    cameraControl.prevX = e.touches[0].clientX;
+                    cameraControl.prevY = e.touches[0].clientY;
+                    cameraControl.pointerDownX = e.touches[0].clientX;
+                    cameraControl.pointerDownY = e.touches[0].clientY;
+                } else if (e.touches.length === 2) {
+                    cameraControl.isDragging = false;
+                    cameraControl.pinchDistance = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                }
+            }, { passive: true });
+
+            domElem.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 1 && cameraControl.isDragging) {
+                    const dx = e.touches[0].clientX - cameraControl.prevX;
+                    const dy = e.touches[0].clientY - cameraControl.prevY;
+                    cameraControl.prevX = e.touches[0].clientX;
+                    cameraControl.prevY = e.touches[0].clientY;
+
+                    cameraControl.theta -= dx * 0.007;
+                    cameraControl.phi -= dy * 0.007;
+                    updateCameraPosition();
+                } else if (e.touches.length === 2) {
+                    const newDist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                    const delta = cameraControl.pinchDistance - newDist;
+                    cameraControl.radius += delta * 0.03;
+                    cameraControl.pinchDistance = newDist;
+                    updateCameraPosition();
+                }
+            }, { passive: true });
+
+            domElem.addEventListener('touchend', (e) => {
+                if (e.changedTouches.length === 1 && cameraControl.isDragging) {
+                    const touch = e.changedTouches[0];
+                    const moveDist = Math.hypot(touch.clientX - cameraControl.pointerDownX, touch.clientY - cameraControl.pointerDownY);
+                    if (moveDist < 10) {
+                        handleCanvasTap(touch.clientX, touch.clientY);
+                    }
+                }
+                cameraControl.isDragging = false;
+            });
+        }
+
+        function handleCanvasTap(clientX, clientY) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(selectableMeshes, false);
+
+            if (intersects.length > 0) {
+                const priorityOrder = ['temporizador', 'sensor', 'bomba', 'canales', 'deposito'];
+                let chosenKey = intersects[0].object.userData.partKey;
+
+                for (const pKey of priorityOrder) {
+                    const hit = intersects.find((item) => item.object.userData.partKey === pKey);
+                    if (hit) {
+                        chosenKey = pKey;
+                        break;
+                    }
+                }
+                selectPart(chosenKey);
+            }
+        }
+
+        function onWindowResize() {
+            if (!container || !renderer || !camera) return;
+            camera.aspect = container.clientWidth / container.clientHeight;
+            computeResponsiveCameraDefaults();
+            cameraControl.radius = cameraControl.defaultRadius;
+            cameraControl.target.copy(cameraControl.defaultTarget);
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            updateCameraPosition();
+        }
+
+        let lastTime = performance.now();
+
+        function animate(now) {
+            requestAnimationFrame(animate);
+            const dt = Math.min((now - lastTime) / 1000, 0.1);
+            lastTime = now;
+
+            updateSimulation(dt);
+            updateProjectedLabels();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function () {
+            initScene();
+            lastTime = performance.now();
+            animate(lastTime);
+        };
+    </script>
+</body>
+</html>
